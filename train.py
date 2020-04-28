@@ -65,6 +65,7 @@ def train_fn(model, train_loader, valid_loader, device):
 
         for i, data in enumerate(train_loader):
             images = data["image"].to(device)
+            print(f"   HACK = {images.shape}")
             labels = data["label"].to(device)
 
             logits = model(images)
@@ -189,6 +190,11 @@ def train():
         pd.read_csv(os.path.join(BASE_PATH, "metadata.csv"))
         .query("view == 'PA'")  # taking only PA view
     )
+
+    from utils import gcs_imread
+    filename = df["filename"].iloc[0]
+    image = gcs_imread(bucket, os.path.join(BASE_DIR, "images", filename))
+    print(f"   HACK1 = {image.shape}")
 
     print("Split train and validation data")
     proc_data = ImageDataset(
