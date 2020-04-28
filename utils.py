@@ -128,7 +128,7 @@ def seed_torch(seed=42):
 
 def gcs_imread(bucket, blob_path):
     blob = bucket.blob(blob_path)
-    image = cv2.imdecode(np.asarray(bytearray(blob.download_as_string()), dtype=np.uint8), 0)
+    image = cv2.imdecode(np.asarray(bytearray(blob.download_as_string()), dtype=np.uint8), 1)
     return image
 
 
