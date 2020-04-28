@@ -13,12 +13,13 @@ from torch.nn import functional as F
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms
 from bedrock_client.bedrock.api import BedrockApi
 from google.cloud import storage
 from sklearn import metrics
 
 from senet import se_resnext50_32x4d
-from utils import ImageDataset, ToTensor, seed_torch
+from utils import ImageDataset, Rescale, RandomCrop, ToTensor, seed_torch
 
 PROJECT = "span-production"
 BUCKET = "bedrock-sample"
@@ -185,8 +186,13 @@ def train():
     print("Split train and validation data")
     proc_data = ImageDataset(
         root_dir=BUCKET,
-        image_dir="proc_images",
-        transform=ToTensor(),
+        image_dir="images",
+        bucket=bucket,
+        transform=transforms.Compose([
+            Rescale(256),
+            RandomCrop(224),
+            ToTensor(),
+        ])
     )
 
     seed_torch(seed=42)
