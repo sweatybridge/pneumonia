@@ -1,26 +1,20 @@
 """
 Script for serving.
 """
-import json
-
 import torch
 from torch.nn import functional as F
 from torchvision import transforms
 from flask import Flask, request
 
-from preprocess import Rescale, RandomCrop
-from train import CustomSEResNeXt, CFG, ToTensor
+from train import CustomSEResNeXt
+from utils import Rescale, RandomCrop, ToTensor
 
-BUCKET = "gs://bedrock-sample/chestxray/"
-
-
-def load_model(device):
-    model = CustomSEResNeXt()
-    model.load_state_dict(torch.load(CFG.model_path, map_location=device))
-    return model
+device = torch.device("cpu")
+model = CustomSEResNeXt()
+model.load_state_dict(torch.load("artefact/train/trained_model.pth", map_location=device))
 
 
-def predict(image, model, device):
+def predict(image):
     model.to(device)
     model.eval()
 
@@ -39,8 +33,6 @@ def predict(image, model, device):
 
 # pylint: disable=invalid-name
 app = Flask(__name__)
-device = torch.device("cpu")
-model = load_model(device)
 
 
 @app.route("/", methods=["POST"])
@@ -49,10 +41,7 @@ def get_churn():
 
     # TODO: what is the input?
     image = request.json
-    result = {
-        "prob": predict(image, model, device)
-    }
-    return result
+    return {"prob": predict(image)}
 
 
 def main():
