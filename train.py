@@ -1,6 +1,7 @@
 """
 Script to train model.
 """
+import io
 import logging
 import os
 import time
@@ -13,21 +14,24 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import Dataset, DataLoader
 from bedrock_client.bedrock.api import BedrockApi
+from google.cloud import storage
 from sklearn import metrics
 
 from senet import se_resnext50_32x4d
 from utils import ImageDataset, ToTensor, seed_torch
 
-BUCKET = os.getenv("BUCKET")
+PROJECT = "span-production"
+BUCKET = "bedrock-sample"
+BASE_DIR = os.getenv("BASE_DIR")
 
 
 class CustomSEResNeXt(nn.Module):
 
-    def __init__(self, weights_path="pytorch-se-resnext/se_resnext50_32x4d-a260b3a4.pth"):
+    def __init__(self, buffer, device):
         super().__init__()
 
         self.model = se_resnext50_32x4d(pretrained=None)
-        self.model.load_state_dict(torch.load(os.path.join(BUCKET, weights_path)))
+        self.model.load_state_dict(torch.load(buffer, map_location=device))
         self.model.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.model.last_linear = nn.Linear(self.model.last_linear.in_features, CFG.n_classes)
 
@@ -172,13 +176,16 @@ class CFG:
 
 def train():
     """Train"""
+    client = storage.Client(PROJECT)
+    bucket = client.get_bucket(BUCKET)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)
 
     print("Split train and validation data")
     proc_data = ImageDataset(
         root_dir=BUCKET,
-        image_path="proc_images",
+        image_dir="proc_images",
         transform=ToTensor(),
     )
 
@@ -191,7 +198,9 @@ def train():
     valid_loader = DataLoader(valid_data, batch_size=CFG.batch_size, shuffle=False)
 
     print("Train model")
-    model = CustomSEResNeXt()
+    se_model_blob = bucket.blob(os.path.join(
+        BASE_DIR, "pytorch-se-resnext/se_resnext50_32x4d-a260b3a4.pth"))
+    model = CustomSEResNeXt(io.BytesIO(se_model_blob.download_as_string()), device)
     train_fn(model, train_loader, valid_loader, device)
 
     print("Evaluate")

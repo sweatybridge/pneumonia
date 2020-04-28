@@ -30,7 +30,7 @@ train {
     }
 
     parameters {
-        BUCKET = "gs://bedrock-sample/chestxray/"
+        BASE_DIR = "chestxray/"
     }
 }
 

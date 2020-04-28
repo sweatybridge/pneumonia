@@ -1,6 +1,8 @@
+"""
+Script containing commonly used functions.
+"""
 import os
 import random
-import time
 
 import numpy as np
 import pandas as pd
@@ -84,10 +86,11 @@ class ToTensor(object):
 class ImageDataset(Dataset):
     """Class for X-ray dataset."""
 
-    def __init__(self, root_dir, image_path, metadata_path="metadata.csv", transform=None):
+    def __init__(self, root_dir, image_dir, metadata_path="metadata.csv", transform=None, bucket=None):
         self.root_dir = root_dir
-        self.image_path = image_path
+        self.image_dir = image_dir
         self.transform = transform
+        self.bucket = bucket
         self.df = (
             pd.read_csv(os.path.join(root_dir, metadata_path))
             .query("view == 'PA'")  # taking only PA view
@@ -99,8 +102,12 @@ class ImageDataset(Dataset):
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-            
-        image = cv2.imread(os.path.join(self.root_dir, self.image_path, self.df["filename"].iloc[idx]))
+
+        file_path = os.path.join(self.root_dir, self.image_dir, self.df["filename"].iloc[idx])
+        if self.bucket is None:
+            image = cv2.imread(file_path)
+        else:
+            image = gcs_imread(self.bucket, file_path)
         
         if self.transform:
             image = self.transform(image)
@@ -120,3 +127,14 @@ def seed_torch(seed=42):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
+
+
+def gcs_imread(bucket, blob_path):
+    blob = bucket.blob(blob_path)
+    image = cv2.imdecode(np.asarray(bytearray(blob.download_as_string()), dtype=np.uint8), 0)
+    return image
+
+
+def gcs_imwrite(bucket, blob_path, filename, image):
+    cv2.imwrite(filename, image)
+    bucket.blob(blob_path).upload_from_filename(filename)
