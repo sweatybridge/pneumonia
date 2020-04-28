@@ -7,6 +7,7 @@ import os
 import time
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
@@ -24,6 +25,7 @@ from utils import ImageDataset, Rescale, RandomCrop, ToTensor, seed_torch
 PROJECT = "span-production"
 BUCKET = "bedrock-sample"
 BASE_DIR = os.getenv("BASE_DIR")
+BASE_PATH = f"gs://{BUCKET}/{BASE_DIR}"
 
 
 class CustomSEResNeXt(nn.Module):
@@ -183,10 +185,16 @@ def train():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)
 
+    metadata_df = (
+        pd.read_csv(os.path.join(BASE_PATH, "metadata.csv"), usecols=["filename", "view"])
+        .query("view == 'PA'")  # taking only PA view
+    )
+
     print("Split train and validation data")
     proc_data = ImageDataset(
-        root_dir=BUCKET,
+        root_dir=BASE_DIR,
         image_dir="images",
+        df=metadata_df,
         bucket=bucket,
         transform=transforms.Compose([
             Rescale(256),

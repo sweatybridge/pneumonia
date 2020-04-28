@@ -86,15 +86,12 @@ class ToTensor(object):
 class ImageDataset(Dataset):
     """Class for X-ray dataset."""
 
-    def __init__(self, root_dir, image_dir, metadata_path="metadata.csv", transform=None, bucket=None):
+    def __init__(self, root_dir, image_dir, df, transform=None, bucket=None):
         self.root_dir = root_dir
         self.image_dir = image_dir
         self.transform = transform
         self.bucket = bucket
-        self.df = (
-            pd.read_csv(os.path.join(root_dir, metadata_path))
-            .query("view == 'PA'")  # taking only PA view
-        )
+        self.df = df
 
     def __len__(self):
         return len(self.df)
