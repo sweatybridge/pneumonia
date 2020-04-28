@@ -1,5 +1,6 @@
 bdrk==0.2.0
 numpy==1.18.2
+opencv-python 4.2.0.34
 pandas==1.0.3
 scikit-image==0.15.0
 scikit-learn==0.22.1
