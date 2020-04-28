@@ -183,10 +183,10 @@ def train():
     bucket = client.get_bucket(BUCKET)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(device)
+    print(f"  Device found = {device}")
 
-    metadata_df = (
-        pd.read_csv(os.path.join(BASE_PATH, "metadata.csv"), usecols=["filename", "view"])
+    df = (
+        pd.read_csv(os.path.join(BASE_PATH, "metadata.csv"))
         .query("view == 'PA'")  # taking only PA view
     )
 
@@ -194,7 +194,7 @@ def train():
     proc_data = ImageDataset(
         root_dir=BASE_DIR,
         image_dir="images",
-        df=metadata_df,
+        df=df,
         bucket=bucket,
         transform=transforms.Compose([
             Rescale(256),
