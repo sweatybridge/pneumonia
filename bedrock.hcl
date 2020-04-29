@@ -5,7 +5,7 @@ train {
         image = "basisai/workload-standard:v0.1.2"
         install = [
             "pip3 install --upgrade pip",
-            "pip3 install -r requirements.txt",
+            "pip3 install -r requirements-train.txt",
             "pip3 install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html",
         ]
         script = [{sh = ["python3 train.py"]}]
