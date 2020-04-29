@@ -46,7 +46,7 @@ def main():
         encoded_img = encode_image(img.ravel())
         data = json.dumps({"encoded_image": encoded_img, "image_shape": img_shape})
 
-        url = "http://localhost:8080"  # 'https://wild-mountain-4441.pub.playground.bdrk.ai'
+        url = "https://morning-frog-4457.pub.playground.bdrk.ai"
         headers = {"Content-Type": "application/json"}
         if token:
             headers.update({"X-Bedrock-Api-Token": token})
