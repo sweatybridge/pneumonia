@@ -29,9 +29,9 @@ BASE_PATH = f"gs://{BUCKET}/{BASE_DIR}"
 
 
 class CFG:
-    lr = 1e-5
+    lr = 5e-4
     batch_size = 8
-    epochs = 20
+    epochs = 10
     n_classes = 2
     pretrained_weights = os.path.join(
         BASE_DIR, "pytorch-se-resnext/se_resnext50_32x4d-a260b3a4.pth")
