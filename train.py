@@ -202,6 +202,7 @@ def train():
     se_model_blob = bucket.blob(CFG.pretrained_weights)
     model = CustomSEResNeXt(io.BytesIO(se_model_blob.download_as_string()),
                             device,
+                            CFG.n_classes,
                             save=CFG.pretrained_model_path)
     train_fn(model, train_loader, valid_loader, device)
 

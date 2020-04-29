@@ -21,22 +21,22 @@ def encode_image(array, dtype=np.uint8):
 
     
 def main():
-    max_width = 900 #st.sidebar.slider("Set page width", min_value=700, max_value=1500, value=1000, step=20)
-    st.markdown(
-        f"""
-        <style>
-        .reportview-container .main .block-container{{
-            max-width: {max_width}px;
-        }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    # max_width = st.sidebar.slider("Set page width", 700, 1500, 1000, 20)
+    # st.markdown(
+    #     f"""
+    #     <style>
+    #     .reportview-container .main .block-container{{
+    #         max-width: {max_width}px;
+    #     }}
+    #     </style>
+    #     """,
+    #     unsafe_allow_html=True,
+    # )
     
     st.title("COVID-19 Chest X-ray Image Classification")
     
     token = st.text_input("Input token.")
-    
+
     uploaded_file = st.file_uploader("Upload an image.")
     if uploaded_file is not None:
         image = Image.open(uploaded_file)
@@ -48,7 +48,7 @@ def main():
 
         url = "https://morning-frog-4457.pub.playground.bdrk.ai"
         headers = {"Content-Type": "application/json"}
-        if token:
+        if token != "":
             headers.update({"X-Bedrock-Api-Token": token})
         
         response = requests.post(url, headers=headers, data=data)
