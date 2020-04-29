@@ -28,13 +28,27 @@ BASE_DIR = os.getenv("BASE_DIR")
 BASE_PATH = f"gs://{BUCKET}/{BASE_DIR}"
 
 
+class CFG:
+    lr = 1e-5
+    batch_size = 8
+    epochs = 20
+    n_classes = 2
+    pretrained_weights = os.path.join(
+        BASE_DIR, "pytorch-se-resnext/se_resnext50_32x4d-a260b3a4.pth")
+    pretrained_model_path = "/artefact/pretrained_model.pth"
+    finetuned_model_path = "/artefact/finetuned_model.pth"
+
+
 class CustomSEResNeXt(nn.Module):
 
-    def __init__(self, buffer, device):
+    def __init__(self, weights_path, device, save=None):
         super().__init__()
 
         self.model = se_resnext50_32x4d(pretrained=None)
-        self.model.load_state_dict(torch.load(buffer, map_location=device))
+        self.model.load_state_dict(torch.load(weights_path, map_location=device))
+        if save is not None:
+            torch.save(self.model.state_dict(), save)
+
         self.model.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.model.last_linear = nn.Linear(self.model.last_linear.in_features, CFG.n_classes)
 
@@ -113,9 +127,9 @@ def train_fn(model, train_loader, valid_loader, device):
 
         if avg_val_loss < best_loss:
             print(f"Epoch {epoch + 1}: val_loss improved from {best_loss:.5f} to {avg_val_loss:.5f}, "
-                  f"saving model to {CFG.model_path}")
+                  f"saving model to {CFG.finetuned_model_path}")
             best_loss = avg_val_loss
-            torch.save(model.state_dict(), CFG.model_path)
+            torch.save(model.state_dict(), CFG.finetuned_model_path)
         else:
             print(f"Epoch {epoch + 1}: val_loss did not improve from {avg_val_loss:.5f}")
 
@@ -167,14 +181,6 @@ def compute_log_metrics(y_val, y_prob, y_pred):
     bedrock.log_metric("Avg precision", avg_prc)
     bedrock.log_chart_data(y_val.astype(int).tolist(),
                            y_prob.flatten().tolist())
-
-    
-class CFG:
-    lr = 1e-5
-    batch_size = 8
-    epochs = 20
-    n_classes = 2
-    model_path = "/artefact/trained_model.pth"
     
 
 def train():
@@ -212,9 +218,10 @@ def train():
     valid_loader = DataLoader(valid_data, batch_size=CFG.batch_size, shuffle=False)
 
     print("Train model")
-    se_model_blob = bucket.blob(os.path.join(
-        BASE_DIR, "pytorch-se-resnext/se_resnext50_32x4d-a260b3a4.pth"))
-    model = CustomSEResNeXt(io.BytesIO(se_model_blob.download_as_string()), device)
+    se_model_blob = bucket.blob(CFG.pretrained_weights)
+    model = CustomSEResNeXt(io.BytesIO(se_model_blob.download_as_string()),
+                            device,
+                            CFG.pretrained_model_path)
     train_fn(model, train_loader, valid_loader, device)
 
     print("Evaluate")
