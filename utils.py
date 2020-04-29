@@ -5,11 +5,13 @@ import os
 import random
 
 import numpy as np
-import pandas as pd
 import cv2
 import torch
+import torch.nn as nn
 from torch.utils.data import Dataset
 from skimage import transform
+
+from senet import se_resnext50_32x4d
 
 
 class Rescale(object):
@@ -135,3 +137,21 @@ def gcs_imread(bucket, blob_path):
 def gcs_imwrite(bucket, blob_path, filename, image):
     cv2.imwrite(filename, image)
     bucket.blob(blob_path).upload_from_filename(filename)
+
+
+class CustomSEResNeXt(nn.Module):
+
+    def __init__(self, weights_path, device, n_classes=2, save=None):
+        super().__init__()
+
+        self.model = se_resnext50_32x4d(pretrained=None)
+        self.model.load_state_dict(torch.load(weights_path, map_location=device))
+        if save is not None:
+            torch.save(self.model.state_dict(), save)
+
+        self.model.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.model.last_linear = nn.Linear(self.model.last_linear.in_features, n_classes)
+
+    def forward(self, x):
+        x = self.model(x)
+        return x

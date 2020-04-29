@@ -10,8 +10,7 @@ from torch.nn import functional as F
 from torchvision import transforms
 from flask import Flask, request
 
-from train import CustomSEResNeXt, seed_torch
-from utils import Rescale, RandomCrop, ToTensor
+from utils import Rescale, RandomCrop, ToTensor, CustomSEResNeXt, seed_torch
 
 device = torch.device("cpu")
 model = CustomSEResNeXt("/artefact/pretrained_model.pth", device)
@@ -23,6 +22,7 @@ def decode_image(field, dtype=np.uint8):
     """Decode a base64 encoded numpy array to a list of floats.
     Args:
         field: base64 encoded string or bytes
+        dtype
     Returns:
         numpy.array
     """
@@ -35,6 +35,7 @@ def decode_image(field, dtype=np.uint8):
 
 
 def predict(request_json):
+    """Predict function."""
     seed_torch(seed=42)
     
     image = decode_image(request_json["encoded_image"]).reshape(

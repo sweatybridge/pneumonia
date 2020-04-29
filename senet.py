@@ -1,16 +1,85 @@
-# https://github.com/Cadene/pretrained-models.pytorch/blob/master/pretrainedmodels/models/senet.py
-
-import math
+"""
+Code gently borrowed from
+https://github.com/Cadene/pretrained-models.pytorch/blob/master/pretrainedmodels/models/senet.py
+"""
+from __future__ import print_function, division, absolute_import
 from collections import OrderedDict
+import math
 
-import numpy as np
-import pandas as pd
-import torch
 import torch.nn as nn
-from torch.optim import Adam, SGD
-from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau
-from torch.utils.data import DataLoader, Dataset
-import torchvision.models as models
+from torch.utils import model_zoo
+
+__all__ = ['SENet', 'senet154', 'se_resnet50', 'se_resnet101', 'se_resnet152',
+           'se_resnext50_32x4d', 'se_resnext101_32x4d']
+
+pretrained_settings = {
+    'senet154': {
+        'imagenet': {
+            'url': 'http://data.lip6.fr/cadene/pretrainedmodels/senet154-c7b49a05.pth',
+            'input_space': 'RGB',
+            'input_size': [3, 224, 224],
+            'input_range': [0, 1],
+            'mean': [0.485, 0.456, 0.406],
+            'std': [0.229, 0.224, 0.225],
+            'num_classes': 1000
+        }
+    },
+    'se_resnet50': {
+        'imagenet': {
+            'url': 'http://data.lip6.fr/cadene/pretrainedmodels/se_resnet50-ce0d4300.pth',
+            'input_space': 'RGB',
+            'input_size': [3, 224, 224],
+            'input_range': [0, 1],
+            'mean': [0.485, 0.456, 0.406],
+            'std': [0.229, 0.224, 0.225],
+            'num_classes': 1000
+        }
+    },
+    'se_resnet101': {
+        'imagenet': {
+            'url': 'http://data.lip6.fr/cadene/pretrainedmodels/se_resnet101-7e38fcc6.pth',
+            'input_space': 'RGB',
+            'input_size': [3, 224, 224],
+            'input_range': [0, 1],
+            'mean': [0.485, 0.456, 0.406],
+            'std': [0.229, 0.224, 0.225],
+            'num_classes': 1000
+        }
+    },
+    'se_resnet152': {
+        'imagenet': {
+            'url': 'http://data.lip6.fr/cadene/pretrainedmodels/se_resnet152-d17c99b7.pth',
+            'input_space': 'RGB',
+            'input_size': [3, 224, 224],
+            'input_range': [0, 1],
+            'mean': [0.485, 0.456, 0.406],
+            'std': [0.229, 0.224, 0.225],
+            'num_classes': 1000
+        }
+    },
+    'se_resnext50_32x4d': {
+        'imagenet': {
+            'url': 'http://data.lip6.fr/cadene/pretrainedmodels/se_resnext50_32x4d-a260b3a4.pth',
+            'input_space': 'RGB',
+            'input_size': [3, 224, 224],
+            'input_range': [0, 1],
+            'mean': [0.485, 0.456, 0.406],
+            'std': [0.229, 0.224, 0.225],
+            'num_classes': 1000
+        }
+    },
+    'se_resnext101_32x4d': {
+        'imagenet': {
+            'url': 'http://data.lip6.fr/cadene/pretrainedmodels/se_resnext101_32x4d-3b2fe3d8.pth',
+            'input_space': 'RGB',
+            'input_size': [3, 224, 224],
+            'input_range': [0, 1],
+            'mean': [0.485, 0.456, 0.406],
+            'std': [0.229, 0.224, 0.225],
+            'num_classes': 1000
+        }
+    },
+}
 
 
 class SEModule(nn.Module):
@@ -140,6 +209,49 @@ class SENet(nn.Module):
     def __init__(self, block, layers, groups, reduction, dropout_p=0.2,
                  inplanes=128, input_3x3=True, downsample_kernel_size=3,
                  downsample_padding=1, num_classes=1000):
+        """
+        Parameters
+        ----------
+        block (nn.Module): Bottleneck class.
+            - For SENet154: SEBottleneck
+            - For SE-ResNet models: SEResNetBottleneck
+            - For SE-ResNeXt models:  SEResNeXtBottleneck
+        layers (list of ints): Number of residual blocks for 4 layers of the
+            network (layer1...layer4).
+        groups (int): Number of groups for the 3x3 convolution in each
+            bottleneck block.
+            - For SENet154: 64
+            - For SE-ResNet models: 1
+            - For SE-ResNeXt models:  32
+        reduction (int): Reduction ratio for Squeeze-and-Excitation modules.
+            - For all models: 16
+        dropout_p (float or None): Drop probability for the Dropout layer.
+            If `None` the Dropout layer is not used.
+            - For SENet154: 0.2
+            - For SE-ResNet models: None
+            - For SE-ResNeXt models: None
+        inplanes (int):  Number of input channels for layer1.
+            - For SENet154: 128
+            - For SE-ResNet models: 64
+            - For SE-ResNeXt models: 64
+        input_3x3 (bool): If `True`, use three 3x3 convolutions instead of
+            a single 7x7 convolution in layer0.
+            - For SENet154: True
+            - For SE-ResNet models: False
+            - For SE-ResNeXt models: False
+        downsample_kernel_size (int): Kernel size for downsampling convolutions
+            in layer2, layer3 and layer4.
+            - For SENet154: 3
+            - For SE-ResNet models: 1
+            - For SE-ResNeXt models: 1
+        downsample_padding (int): Padding for downsampling convolutions in
+            layer2, layer3 and layer4.
+            - For SENet154: 1
+            - For SE-ResNet models: 0
+            - For SE-ResNeXt models: 0
+        num_classes (int): Number of outputs in `last_linear` layer.
+            - For all models: 1000
+        """
         super(SENet, self).__init__()
         self.inplanes = inplanes
         if input_3x3:
@@ -264,6 +376,48 @@ def initialize_pretrained_model(model, num_classes, settings):
     model.input_range = settings['input_range']
     model.mean = settings['mean']
     model.std = settings['std']
+
+
+def senet154(num_classes=1000, pretrained='imagenet'):
+    model = SENet(SEBottleneck, [3, 8, 36, 3], groups=64, reduction=16,
+                  dropout_p=0.2, num_classes=num_classes)
+    if pretrained is not None:
+        settings = pretrained_settings['senet154'][pretrained]
+        initialize_pretrained_model(model, num_classes, settings)
+    return model
+
+
+def se_resnet50(num_classes=1000, pretrained='imagenet'):
+    model = SENet(SEResNetBottleneck, [3, 4, 6, 3], groups=1, reduction=16,
+                  dropout_p=None, inplanes=64, input_3x3=False,
+                  downsample_kernel_size=1, downsample_padding=0,
+                  num_classes=num_classes)
+    if pretrained is not None:
+        settings = pretrained_settings['se_resnet50'][pretrained]
+        initialize_pretrained_model(model, num_classes, settings)
+    return model
+
+
+def se_resnet101(num_classes=1000, pretrained='imagenet'):
+    model = SENet(SEResNetBottleneck, [3, 4, 23, 3], groups=1, reduction=16,
+                  dropout_p=None, inplanes=64, input_3x3=False,
+                  downsample_kernel_size=1, downsample_padding=0,
+                  num_classes=num_classes)
+    if pretrained is not None:
+        settings = pretrained_settings['se_resnet101'][pretrained]
+        initialize_pretrained_model(model, num_classes, settings)
+    return model
+
+
+def se_resnet152(num_classes=1000, pretrained='imagenet'):
+    model = SENet(SEResNetBottleneck, [3, 8, 36, 3], groups=1, reduction=16,
+                  dropout_p=None, inplanes=64, input_3x3=False,
+                  downsample_kernel_size=1, downsample_padding=0,
+                  num_classes=num_classes)
+    if pretrained is not None:
+        settings = pretrained_settings['se_resnet152'][pretrained]
+        initialize_pretrained_model(model, num_classes, settings)
+    return model
 
 
 def se_resnext50_32x4d(num_classes=1000, pretrained='imagenet'):

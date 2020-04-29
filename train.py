@@ -19,8 +19,7 @@ from bedrock_client.bedrock.api import BedrockApi
 from google.cloud import storage
 from sklearn import metrics
 
-from senet import se_resnext50_32x4d
-from utils import ImageDataset, Rescale, RandomCrop, ToTensor, seed_torch
+from utils import ImageDataset, Rescale, RandomCrop, ToTensor, CustomSEResNeXt, seed_torch
 
 PROJECT = "span-production"
 BUCKET = "bedrock-sample"
@@ -37,24 +36,6 @@ class CFG:
         BASE_DIR, "pytorch-se-resnext/se_resnext50_32x4d-a260b3a4.pth")
     pretrained_model_path = "/artefact/pretrained_model.pth"
     finetuned_model_path = "/artefact/finetuned_model.pth"
-
-
-class CustomSEResNeXt(nn.Module):
-
-    def __init__(self, weights_path, device, save=None):
-        super().__init__()
-
-        self.model = se_resnext50_32x4d(pretrained=None)
-        self.model.load_state_dict(torch.load(weights_path, map_location=device))
-        if save is not None:
-            torch.save(self.model.state_dict(), save)
-
-        self.model.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.model.last_linear = nn.Linear(self.model.last_linear.in_features, CFG.n_classes)
-
-    def forward(self, x):
-        x = self.model(x)
-        return x
 
 
 def train_fn(model, train_loader, valid_loader, device):
@@ -221,7 +202,7 @@ def train():
     se_model_blob = bucket.blob(CFG.pretrained_weights)
     model = CustomSEResNeXt(io.BytesIO(se_model_blob.download_as_string()),
                             device,
-                            CFG.pretrained_model_path)
+                            save=CFG.pretrained_model_path)
     train_fn(model, train_loader, valid_loader, device)
 
     print("Evaluate")
