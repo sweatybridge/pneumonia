@@ -79,7 +79,7 @@ def train_fn(model, train_loader, valid_loader, device):
         train_acc = metrics.accuracy_score(y_train, y_preds)
 
         model.eval()
-        avg_val_loss = 0.
+        val_loss = 0.
         y_valid = []
         y_preds = []
 
@@ -91,12 +91,12 @@ def train_fn(model, train_loader, valid_loader, device):
                 logits = model(images)
             loss = criterion(logits, labels)
 
-            avg_val_loss += loss.item() / len(valid_loader)
+            val_loss += loss.item() / len(valid_loader)
 
             y_valid.append(labels.cpu().numpy())
             y_preds.append(logits.cpu().numpy().argmax(axis=1))
 
-        scheduler.step(avg_val_loss)
+        scheduler.step(val_loss)
 
         y_valid = np.concatenate(y_valid)
         y_preds = np.concatenate(y_preds)
@@ -104,15 +104,15 @@ def train_fn(model, train_loader, valid_loader, device):
 
         print(f"Epoch {epoch + 1}/{CFG.epochs}: elapsed time: {time.time() - start_time:.0f}s\n"
               f"  loss: {avg_loss:.4f}  train_acc: {train_acc:.4f}"
-              f" - val_loss: {avg_val_loss:.4f}  val_acc: {valid_acc:.4f}")
+              f" - val_loss: {val_loss:.4f}  val_acc: {valid_acc:.4f}")
 
-        if avg_val_loss < best_loss:
-            print(f"Epoch {epoch + 1}: val_loss improved from {best_loss:.5f} to {avg_val_loss:.5f}, "
+        if val_loss < best_loss:
+            print(f"Epoch {epoch + 1}: val_loss improved from {best_loss:.5f} to {val_loss:.5f}, "
                   f"saving model to {CFG.finetuned_model_path}")
-            best_loss = avg_val_loss
+            best_loss = val_loss
             torch.save(model.state_dict(), CFG.finetuned_model_path)
         else:
-            print(f"Epoch {epoch + 1}: val_loss did not improve from {avg_val_loss:.5f}")
+            print(f"Epoch {epoch + 1}: val_loss did not improve from {best_loss:.5f}")
 
 
 def predict(model, data_loader, device):

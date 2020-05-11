@@ -32,7 +32,6 @@ serve {
             "gunicorn --bind=:${BEDROCK_SERVER_PORT:-8080} --worker-class=gthread --workers=${WORKERS} --timeout=300 --preload serve_http:app"
         ]}
     ]
-
     parameters {
         WORKERS = "1"
     }
