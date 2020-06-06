@@ -1,6 +1,20 @@
 version = "1.0"
 
 train {
+    step preprocess {
+        image = "basisai/workload-standard:v0.1.2"
+        install = [
+            "pip3 install --upgrade pip",
+            "pip3 install -r requirements-train.txt",
+            "pip3 install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html",
+        ]
+        script = [{sh = ["python3 preprocess.py"]}]
+        resources {
+            cpu = "2"
+            memory = "12G"
+        }
+    }
+
     step train {
         image = "basisai/workload-standard:v0.1.2"
         install = [
@@ -13,10 +27,16 @@ train {
             cpu = "2"
             memory = "12G"
         }
+        depends_on = ["preprocess"]
     }
 
     parameters {
-        BASE_DIR = "chestxray/"
+        PROJECT = "span-production"
+        RAW_BUCKET = "bedrock-sample"
+        RAW_DATA_DIR = "chestxray"
+        BUCKET = "span-temp-production"
+        BASE_DIR = "pneumonia"
+        PREPROCESSED_DIR = "preprocessed"
     }
 }
 
