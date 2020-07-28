@@ -3,7 +3,6 @@ import json
 import requests
 from io import BytesIO
 
-import numpy as np
 import streamlit as st
 from PIL import Image
 
@@ -38,9 +37,9 @@ def image_recognize():
     st.title("Chest X-ray Image Classification Demo")
 
     st.sidebar.info(
-        "**Note**: If you see the error message:\n"
+        "**Note**: When querying Bedrock endpoints, for\n"
         "> `ConnectionError: ('Connection aborted.', BrokenPipeError(32, 'Broken pipe'))`\n\n"
-        "please change from **http** to **https** in the API URL.")
+        "change **http** to **https** in the API URL.")
     
     url = st.text_input("Input API URL.")
     token = st.text_input("Input token.")
