@@ -1,7 +1,11 @@
 """
 Script to train model.
 """
-import os, time, io, logging
+import logging
+import os
+import time
+from io import BytesIO
+
 import numpy as np
 import pandas as pd
 import torch
@@ -9,12 +13,12 @@ import torch.nn as nn
 from torch.nn import functional as F
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms
+from torch.utils.data import DataLoader
 from bedrock_client.bedrock.api import BedrockApi
 from google.cloud import storage
 from sklearn import metrics
-from utils import ImageDataset, Rescale, RandomCrop, ToTensor, CustomSEResNeXt, seed_torch
+
+from utils import ImageDataset, ToTensor, CustomSEResNeXt, seed_torch
 
 PROJECT = os.getenv('PROJECT')
 RAW_BUCKET = os.getenv('RAW_BUCKET')
@@ -24,17 +28,22 @@ BASE_DIR = os.getenv('BASE_DIR')
 PREPROCESSED_DIR = os.getenv('PREPROCESSED_DIR')
 
 
+# pylint: disable=too-few-public-methods
 class CFG:
+    """Configuration."""
     lr = 1e-5
     batch_size = 8
     epochs = 20
     n_classes = 2
-    pretrained_weights = os.path.join(RAW_DATA_DIR, "pytorch-se-resnext/se_resnext50_32x4d-a260b3a4.pth")
+    pretrained_weights = os.path.join(
+        RAW_DATA_DIR, "pytorch-se-resnext/se_resnext50_32x4d-a260b3a4.pth")
     pretrained_model_path = "/artefact/pretrained_model.pth"
     finetuned_model_path = "/artefact/finetuned_model.pth"
 
 
+# pylint: disable=too-many-locals
 def train_fn(model, train_loader, valid_loader, device):
+    """Train function."""
     model.to(device)
 
     optimizer = Adam(model.parameters(), lr=CFG.lr, amsgrad=False)
@@ -54,7 +63,7 @@ def train_fn(model, train_loader, valid_loader, device):
 
         optimizer.zero_grad()
 
-        for i, data in enumerate(train_loader):
+        for data in train_loader:
             images = data["image"].to(device)
             labels = data["label"].to(device)
 
@@ -79,7 +88,7 @@ def train_fn(model, train_loader, valid_loader, device):
         y_valid = []
         y_preds = []
 
-        for i, data in enumerate(valid_loader):
+        for data in valid_loader:
             images = data["image"].to(device)
             labels = data["label"].to(device)
 
@@ -112,12 +121,13 @@ def train_fn(model, train_loader, valid_loader, device):
 
 
 def predict(model, data_loader, device):
+    """Predict function."""
     model.to(device)
     model.eval()
 
     y_probs = []
     y_actual = []
-    for i, data in enumerate(data_loader):
+    for data in data_loader:
         images = data["image"].to(device)
         labels = data["label"].to(device)
 
@@ -140,7 +150,7 @@ def compute_log_metrics(y_val, y_prob, y_pred):
     f1_score = metrics.f1_score(y_val, y_pred)
     roc_auc = metrics.roc_auc_score(y_val, y_prob)
     avg_prc = metrics.average_precision_score(y_val, y_prob)
-    
+
     print(f"  Accuracy          = {acc:.6f}")
     print(f"  Precision         = {precision:.6f}")
     print(f"  Recall            = {recall:.6f}")
@@ -158,8 +168,9 @@ def compute_log_metrics(y_val, y_prob, y_pred):
     bedrock.log_metric("Avg precision", avg_prc)
     bedrock.log_chart_data(y_val.astype(int).tolist(),
                            y_prob.flatten().tolist())
-    
 
+
+# pylint: disable=too-many-locals
 def train():
     """Train"""
     client = storage.Client(PROJECT)
@@ -169,36 +180,34 @@ def train():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"  Device found = {device}")
 
-    df = (
+    metadata_df = (
         pd.read_csv(f"gs://{RAW_BUCKET}/{RAW_DATA_DIR}/metadata.csv")
         .query("view == 'PA'")  # taking only PA view
     )
 
     print("Split train and validation data")
     proc_data = ImageDataset(
-                            root_dir=BASE_DIR,
-                            image_dir=PREPROCESSED_DIR,
-                            df=df,
-                            bucket=bucket,
-                            transform=ToTensor()
-                            )
+        root_dir=BASE_DIR,
+        image_dir=PREPROCESSED_DIR,
+        df=metadata_df,
+        bucket=bucket,
+        transform=ToTensor(),
+    )
     seed_torch(seed=42)
     valid_size = int(len(proc_data) * 0.2)
     train_data, valid_data = torch.utils.data.random_split(
-                                                            proc_data, 
-                                                            [len(proc_data) - valid_size, valid_size]
-                                                        )
+        proc_data, [len(proc_data) - valid_size, valid_size])
     train_loader = DataLoader(train_data, batch_size=CFG.batch_size, shuffle=True, drop_last=True)
     valid_loader = DataLoader(valid_data, batch_size=CFG.batch_size, shuffle=False)
 
     print("Train model")
     se_model_blob = raw_bucket.blob(CFG.pretrained_weights)
     model = CustomSEResNeXt(
-                            io.BytesIO(se_model_blob.download_as_string()),
-                            device,
-                            CFG.n_classes,
-                            save=CFG.pretrained_model_path
-                            )
+        BytesIO(se_model_blob.download_as_string()),
+        device,
+        CFG.n_classes,
+        save=CFG.pretrained_model_path,
+    )
     train_fn(model, train_loader, valid_loader, device)
 
     print("Evaluate")

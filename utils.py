@@ -14,7 +14,8 @@ from skimage import transform
 from senet import se_resnext50_32x4d
 
 
-class Rescale(object):
+# pylint: disable=too-few-public-methods
+class Rescale:
     """Rescale the image in a sample to a given size.
 
     Args:
@@ -42,7 +43,7 @@ class Rescale(object):
         return transform.resize(image, (new_h, new_w))
 
 
-class RandomCrop(object):
+class RandomCrop:
     """Crop randomly the image in a sample.
 
     Args:
@@ -69,7 +70,7 @@ class RandomCrop(object):
                      left: left + new_w]
 
 
-class ToTensor(object):
+class ToTensor:
     """Convert ndarrays in sample to Tensors."""
 
     def __call__(self, image):
@@ -77,17 +78,18 @@ class ToTensor(object):
         # numpy image: H x W x C
         # torch image: C X H X W
         image = image.transpose((2, 0, 1))
-        
+
         if image.dtype == np.uint8:
             image = image.astype(np.float32)
             image /= 255.
-        
+
         return torch.from_numpy(image).float()
 
 
 class ImageDataset(Dataset):
     """Class for X-ray dataset."""
 
+    # pylint: disable=too-many-arguments
     def __init__(self, root_dir, image_dir, df, transform=None, bucket=None):
         self.root_dir = root_dir
         self.image_dir = image_dir
@@ -107,10 +109,10 @@ class ImageDataset(Dataset):
             image = cv2.imread(file_path)
         else:
             image = gcs_imread(self.bucket, file_path)
-        
+
         if self.transform:
             image = self.transform(image)
-        
+
         if self.df["finding"].iloc[idx] != "COVID-19":
             label = 0
         else:
@@ -120,6 +122,7 @@ class ImageDataset(Dataset):
 
 
 def seed_torch(seed=42):
+    """Set random seed."""
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
     np.random.seed(seed)
@@ -129,17 +132,20 @@ def seed_torch(seed=42):
 
 
 def gcs_imread(bucket, blob_path):
+    """Load image from GCS bucket."""
     blob = bucket.blob(blob_path)
     image = cv2.imdecode(np.asarray(bytearray(blob.download_as_string()), dtype=np.uint8), 1)
     return image
 
 
 def gcs_imwrite(bucket, blob_path, filename, image):
+    """Save image to GCS bucket."""
     cv2.imwrite(filename, image)
     bucket.blob(blob_path).upload_from_filename(filename)
 
 
 class CustomSEResNeXt(nn.Module):
+    """CustomSEResNeXt"""
 
     def __init__(self, weights_path, device, n_classes=2, save=None):
         super().__init__()

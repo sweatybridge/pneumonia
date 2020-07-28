@@ -3,6 +3,7 @@ Script for serving.
 """
 import base64
 
+import cv2
 import numpy as np
 import six
 import torch
@@ -12,14 +13,17 @@ from flask import Flask, request
 
 from utils import Rescale, RandomCrop, ToTensor, CustomSEResNeXt, seed_torch
 
-device = torch.device("cpu")
-model = CustomSEResNeXt("/artefact/pretrained_model.pth", device)
-model.load_state_dict(torch.load("/artefact/finetuned_model.pth", map_location=device))
-model.eval()
+# MODEL_DIR = "/artefact/"
+MODEL_DIR = "models/"
+
+DEVICE = torch.device("cpu")
+MODEL = CustomSEResNeXt(MODEL_DIR + "pretrained_model.pth", DEVICE)
+MODEL.load_state_dict(torch.load(MODEL_DIR + "finetuned_model.pth", map_location=DEVICE))
+MODEL.eval()
 
 
 def decode_image(field, dtype=np.uint8):
-    """Decode a base64 encoded numpy array to a list of floats.
+    """Decode a base64 encoded image to a list of floats.
     Args:
         field: base64 encoded string or bytes
         dtype
@@ -31,25 +35,24 @@ def decode_image(field, dtype=np.uint8):
     if not isinstance(field, bytes):
         field = six.b(field)
     array = np.frombuffer(base64.b64decode(field), dtype=dtype)
-    return array
+    image_array = cv2.imdecode(array, cv2.IMREAD_ANYCOLOR)
+    return image_array
 
 
 def predict(request_json):
     """Predict function."""
     seed_torch(seed=42)
-    
-    image = decode_image(request_json["encoded_image"]).reshape(
-        request_json["image_shape"])
-    
+
+    image = decode_image(request_json["encoded_image"])
     proc_image = transforms.Compose([
         Rescale(256),
         RandomCrop(224),
         ToTensor(),
     ])(image)
-    proc_image = proc_image.unsqueeze(0).to(device)
+    proc_image = proc_image.unsqueeze(0).to(DEVICE)
 
     with torch.no_grad():
-        logits = model(proc_image)
+        logits = MODEL(proc_image)
 
     return F.softmax(logits, dim=1).cpu().numpy()[0, 1].item()
 
