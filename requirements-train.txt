@@ -1,9 +1,9 @@
-bdrk==0.2.0
-numpy==1.18.2
+bdrk==0.3.0
+numpy==1.19.1
 opencv-python==4.2.0.34
 pandas==1.0.3
 scikit-image==0.15.0
-scikit-learn==0.22.1
+scikit-learn==0.23.1
 gcsfs==0.6.0
 google-cloud-storage==1.28.0
 --find-links https://download.pytorch.org/whl/torch_stable.html
