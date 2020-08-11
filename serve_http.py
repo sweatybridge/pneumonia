@@ -2,6 +2,7 @@
 Script for serving.
 """
 import base64
+import os
 
 import cv2
 import numpy as np
@@ -12,8 +13,9 @@ from flask import Flask, request
 
 from utils import Rescale, RandomCrop, ToTensor, CustomSEResNeXt, seed_torch
 
-# MODEL_DIR = "/artefact/"
-MODEL_DIR = "models/"
+MODEL_DIR = "/artefact/"
+if os.path.exists("models/"):
+    MODEL_DIR = "models/"
 
 DEVICE = torch.device("cpu")
 MODEL = CustomSEResNeXt(MODEL_DIR + "pretrained_model.pth", DEVICE)
