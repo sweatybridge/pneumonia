@@ -4,7 +4,7 @@ import requests
 import streamlit as st
 from PIL import Image
 
-from .utils_image import encode_image, decode_image
+from utils_image import encode_image, decode_image
 
 SAMPLES = {
     "ex1": "covid-19-pneumonia-67.jpeg",
