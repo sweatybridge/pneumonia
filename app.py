@@ -6,11 +6,6 @@ from PIL import Image
 
 from utils_image import encode_image, decode_image
 
-SAMPLES = {
-    "ex1": "covid-19-pneumonia-67.jpeg",
-    "ex2": "pneumococcal-pneumonia-day0.jpg",
-}
-
 
 @st.cache
 def recognize(image, url, token):
@@ -28,15 +23,23 @@ def recognize(image, url, token):
 def image_recognize():
     st.title("Chest X-ray Image Classification Demo")
 
-    url = st.text_input("Input API URL.")
+    url = st.text_input("Input API URL.", "http://127.0.0.1:5000/")
     token = st.text_input("Input token.")
 
-    select = st.selectbox("Choose a mode.", ["", "Select a sample image", "Upload an image"])
+    select_mode = st.selectbox("Choose a mode.", ["", "Select a sample image", "Upload an image"])
 
-    if select == "Select a sample image":
-        select_eg = st.selectbox("Select a sample image.", list(SAMPLES.keys()))
-        uploaded_file = "test_images/" + SAMPLES[select_eg]
-    else:
+    uploaded_file = None
+    if select_mode == "Select a sample image":
+        samples = {
+            "ex1": "covid-19-pneumonia-67.jpeg",
+            "ex2": "covid-19-caso-82-1-8.png",
+            "ex3": "41182_2020_203_Fig4_HTML.jpg",
+            "ex4": "pneumococcal-pneumonia-day0.jpg",
+        }
+
+        select_eg = st.selectbox("Select a sample image.", list(samples.keys()))
+        uploaded_file = "test_images/" + samples[select_eg]
+    elif select_mode == "Upload an image":
         uploaded_file = st.file_uploader("Upload an image.")
 
     if uploaded_file is not None and url != "":
