@@ -26,7 +26,7 @@ def image_recognize():
     url = st.text_input("Input API URL.", "http://127.0.0.1:5000/")
     token = st.text_input("Input token.")
 
-    select_mode = st.selectbox("Choose a mode.", ["", "Select a sample image", "Upload an image"])
+    select_mode = st.selectbox("Choose a mode.", ["Select a sample image", "Upload an image"])
 
     uploaded_file = None
     if select_mode == "Select a sample image":
@@ -37,8 +37,9 @@ def image_recognize():
             "ex4": "pneumococcal-pneumonia-day0.jpg",
         }
 
-        select_eg = st.selectbox("Select a sample image.", list(samples.keys()))
-        uploaded_file = "test_images/" + samples[select_eg]
+        select_eg = st.selectbox("Select a sample image.", [""] + list(samples.keys()))
+        if select_ex != "":
+            uploaded_file = "test_images/" + samples[select_eg]
     elif select_mode == "Upload an image":
         uploaded_file = st.file_uploader("Upload an image.")
 
@@ -54,9 +55,9 @@ def image_recognize():
 
         st.subheader(f"Probability of having COVID-19 = `{prob:.2f}%`")
         st.header("Explainability")
+        st.write("Methods: Grad-CAM, Guided Grad-CAM and Integrated Gradients")
         st.write("To visualise the regions of input that are 'important' for predictions from "
                  "Convolutional Neural Network-based models.")
-        st.write("Methods: Grad-CAM, Guided Grad-CAM and Integrated Gradients")
         st.image(cam_image, caption="Grad-CAM Image", width=300)
         st.image(gc_image, caption="Guided Grad-CAM Image", width=300)
         st.image(ig_image, caption="Integrated Gradients Image", width=300)
