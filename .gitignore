@@ -132,6 +132,7 @@ dmypy.json
 # idea
 .idea/
 
+# DS_Store
 .DS_Store
 
 # models

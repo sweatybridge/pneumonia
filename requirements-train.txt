@@ -1,4 +1,4 @@
-bdrk==0.3.0
+bdrk==0.3.2
 numpy==1.19.1
 opencv-python==4.2.0.34
 pandas==1.0.3

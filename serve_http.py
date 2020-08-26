@@ -4,17 +4,15 @@ Script for serving.
 import os
 
 import torch
-import matplotlib.pyplot as plt
 from torch.nn import functional as F
 from torchvision import transforms
 from flask import Flask, request
-from PIL import Image
-from captum.attr import GuidedGradCam
-from captum.attr import visualization as viz
+from captum.attr import GuidedGradCam, IntegratedGradients
 
 from gradcam_pytorch import GradCam
 from utils import Rescale, RandomCrop, ToTensor, CustomSEResNeXt, seed_torch
-from utils_image import encode_image, decode_image, superimpose_heatmap, fig2img
+from utils_image import (
+    encode_image, decode_image, superimpose_heatmap, get_heatmap, normalize_image_attr)
 
 MODEL_DIR = "/artefact/"
 if os.path.exists("models/"):
@@ -31,46 +29,59 @@ GRAD_CAM = GradCam(model=MODEL.model,
                    use_cuda=False)
 
 GUIDED_GC = GuidedGradCam(MODEL.model, MODEL.model.layer4)
+IG = IntegratedGradients(MODEL.model)
 
 
-def get_grad_cam(proc_image, target):
-    mask = GRAD_CAM(proc_image)
-    img = proc_image.detach().numpy().squeeze().transpose((1, 2, 0))
-    cam = superimpose_heatmap(img, mask)
-
-    attribution = GUIDED_GC.attribute(proc_image, target=target)
-    norm_attr = viz._normalize_image_attr(
-        attribution.detach().squeeze().cpu().numpy().transpose((1, 2, 0)),
-        sign="absolute_value", outlier_perc=2
-    ).tolist()
-    return cam, norm_attr
-
-
-def predict(request_json):
-    """Predict function."""
+def process_image(image):
+    """Process image."""
     seed_torch(seed=42)
-
-    image = decode_image(request_json["encoded_image"])
     proc_image = transforms.Compose([
         Rescale(256),
         RandomCrop(224),
         ToTensor(),
     ])(image)
     proc_image = proc_image.unsqueeze(0).to(DEVICE)
+    return proc_image
 
+
+def predict(proc_image):
+    """Predict function."""
     with torch.no_grad():
         logits = MODEL(proc_image)
         prob = F.softmax(logits, dim=1).cpu().numpy()[0, 1].item()
+    return prob
 
+
+def cv_xai(proc_image, prob):
+    """Perform XAI."""
     target = 1 if prob > 0.5 else 0
-    cam, norm_attr = get_grad_cam(proc_image, target)
-    cam_image = encode_image(Image.fromarray(cam))
 
-    fig = plt.figure(figsize=(6, 6))
-    plt.axis('off')
-    plt.imshow(norm_attr)
-    gc_image = encode_image(fig2img(fig))
-    return prob, cam_image, gc_image
+    # Grad-CAM
+    img = proc_image.detach().numpy().squeeze().transpose((1, 2, 0))
+    mask = GRAD_CAM(proc_image)
+    cam_img = superimpose_heatmap(img, mask)
+
+    # Guided Grad-CAM
+    gc_attribution = GUIDED_GC.attribute(proc_image, target=target)
+    gc_norm_attr = normalize_image_attr(
+        gc_attribution.detach().squeeze().cpu().numpy().transpose((1, 2, 0)),
+        sign="absolute_value", outlier_perc=2
+    )
+    gc_img = get_heatmap(gc_norm_attr)
+
+    # IntegratedGradients
+    ig_attribution = IG.attribute(proc_image, target=target, n_steps=20)
+    ig_norm_attr = normalize_image_attr(
+        ig_attribution.detach().squeeze().cpu().numpy().transpose((1, 2, 0)),
+        sign="absolute_value", outlier_perc=2
+    )
+    ig_img = get_heatmap(ig_norm_attr)
+
+    return {
+        "cam_image": encode_image(cam_img),
+        "gc_image": encode_image(gc_img),
+        "ig_image": encode_image(ig_img),
+    }
 
 
 # pylint: disable=invalid-name
@@ -80,12 +91,14 @@ app = Flask(__name__)
 @app.route("/", methods=["POST"])
 def get_prob():
     """Returns probability."""
-    prob, cam_image, gc_image = predict(request.json)
-    return {
-        "prob": prob,
-        "cam_image": cam_image,
-        "gc_image": gc_image,
-    }
+    image = decode_image(request.json["encoded_image"])
+    proc_image = process_image(image)
+    prob = predict(proc_image)
+    output = {"prob": prob}
+
+    xai_imgs = cv_xai(proc_image, prob)
+    output.update(xai_imgs)
+    return output
 
 
 def main():

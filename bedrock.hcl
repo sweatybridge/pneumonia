@@ -2,7 +2,7 @@ version = "1.0"
 
 train {
     step preprocess {
-        image = "basisai/workload-standard:v0.1.2"
+        image = "basisai/workload-standard:v0.1.3"
         install = [
             "pip3 install --upgrade pip",
             "pip3 install -r requirements-train.txt",
@@ -15,7 +15,7 @@ train {
     }
 
     step train {
-        image = "basisai/workload-standard:v0.1.2"
+        image = "basisai/workload-standard:v0.1.3"
         install = [
             "pip3 install --upgrade pip",
             "pip3 install -r requirements-train.txt",

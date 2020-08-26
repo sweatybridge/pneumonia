@@ -44,25 +44,27 @@ def image_recognize():
 
     if uploaded_file is not None and url != "":
         image = Image.open(uploaded_file)
-        st.image(image, caption="Uploaded Image", width=400)
+        st.image(image, caption="Uploaded Image", width=300)
 
         response_json = recognize(image, url, token)
         prob = response_json["prob"] * 100
         cam_image = decode_image(response_json["cam_image"])
         gc_image = decode_image(response_json["gc_image"])
+        ig_image = decode_image(response_json["ig_image"])
 
         st.subheader(f"Probability of having COVID-19 = `{prob:.2f}%`")
         st.header("Explainability")
-        st.subheader("[Grad-CAM and Guided Grad-CAM](http://gradcam.cloudcv.org/)")
         st.write("To visualise the regions of input that are 'important' for predictions from "
-                 "Convolutional Neural Network (CNN)-based models.")
+                 "Convolutional Neural Network-based models.")
+        st.write("Methods: Grad-CAM, Guided Grad-CAM and Integrated Gradients")
         st.image(cam_image, caption="Grad-CAM Image", width=300)
         st.image(gc_image, caption="Guided Grad-CAM Image", width=300)
+        st.image(ig_image, caption="Integrated Gradients Image", width=300)
 
-    st.sidebar.info(
-        "**Note**: When querying Bedrock endpoints, for\n"
-        "> `ConnectionError: ('Connection aborted.', BrokenPipeError(32, 'Broken pipe'))`\n\n"
-        "change **http** to **https** in the API URL.")
+    # st.sidebar.info(
+    #     "**Note**: When querying Bedrock endpoints, for\n"
+    #     "> `ConnectionError: ('Connection aborted.', BrokenPipeError(32, 'Broken pipe'))`\n\n"
+    #     "change **http** to **https** in the API URL.")
 
 
 if __name__ == "__main__":
