@@ -135,5 +135,8 @@ dmypy.json
 # DS_Store
 .DS_Store
 
-# models
+# others
 models/
+notebooks/
+images/
+*.csv
