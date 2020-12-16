@@ -1,2 +1,2 @@
 opencv-python-headless==4.2.0.34
-streamlit==0.63.1
+streamlit==0.72.0
