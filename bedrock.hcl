@@ -39,10 +39,9 @@ train {
 }
 
 serve {
-    image = "python:3.7"
+    image = "quay.io/basisai/python-cuda:3.9.2-10.1"
     install = [
-        "pip3 install --upgrade pip",
-        "pip3 install -r requirements-serve.txt",
+        "pip3 install -r requirements-serve.txt"
     ]
     script = [
         {sh = [
