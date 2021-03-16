@@ -100,7 +100,7 @@ app = Flask(__name__)
 @app.route("/", methods=["POST"])
 def get_prob():
     """Returns probability."""
-    img = np.frombuffer(files["image"].read(), dtype=np.uint8)
+    img = np.frombuffer(request.files["image"].read(), dtype=np.uint8)
     img = cv2.imdecode(img, cv2.IMREAD_ANYCOLOR)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     # image = decode_image(request.json["encoded_image"])
