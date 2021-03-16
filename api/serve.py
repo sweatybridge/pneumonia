@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 import torch
 from bedrock_client.bedrock.model import BaseModel
+from captum.attr import GuidedGradCam, IntegratedGradients
 from prometheus_client import Gauge
 from torchvision.models import densenet121
 from torchvision.transforms import (
@@ -15,6 +16,15 @@ from torchvision.transforms import (
     Resize,
     ToPILImage,
     ToTensor,
+)
+
+from gradcam_pytorch import GradCam
+from utils_image import (
+    encode_image,
+    decode_image,
+    superimpose_heatmap,
+    get_heatmap,
+    normalize_image_attr,
 )
 
 backlog_length_gauge = Gauge("inference_backlog_length", "Length of inference backlog")
@@ -78,12 +88,23 @@ class Model(BaseModel):
         self.transform = Compose(
             [
                 ToPILImage(),
-                Resize((258, 344)),
-                CenterCrop((224, 320)),
+                Resize(256),
+                CenterCrop(224),
                 ToTensor(),
                 Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ]
         )
+
+        self.grad_cam = GradCam(
+            model=self.model,
+            feature_module=self.model.features,
+            target_layer_names=["denseblock4"],
+            use_cuda=torch.cuda.is_available(),
+        )
+        self.guided_gc = GuidedGradCam(
+            self.model, self.model.features[-2]["denselayer16"].conv2
+        )
+        self.ig = IntegratedGradients(self.model)
 
     def pre_process(self, files, http_body=None):
         img = np.frombuffer(files["image"].read(), dtype=np.uint8)
@@ -95,6 +116,41 @@ class Model(BaseModel):
         return features.unsqueeze(0)
 
     @torch.no_grad()
-    def predict(self, features):
+    def _predict(self, features):
         score = self.model(features).softmax(dim=1).max(dim=1)
         return [{"type": score.indices[0].item(), "conf": score.values[0].item()}]
+
+    def predict(self, features):
+        """Perform XAI."""
+        # Grad-CAM
+        img = features.detach().numpy().squeeze().transpose((1, 2, 0))
+        mask, score = self.grad_cam(features)
+        cam_img = superimpose_heatmap(img, mask)
+
+        # Guided Grad-CAM
+        target = score.argmax()
+        gc_attribution = self.guided_gc.attribute(features, target=target)
+        gc_norm_attr = normalize_image_attr(
+            gc_attribution.detach().squeeze().cpu().numpy().transpose((1, 2, 0)),
+            sign="absolute_value",
+            outlier_perc=2,
+        )
+        gc_img = get_heatmap(gc_norm_attr)
+
+        # IntegratedGradients
+        ig_attribution = self.ig.attribute(features, target=target, n_steps=20)
+        ig_norm_attr = normalize_image_attr(
+            ig_attribution.detach().squeeze().cpu().numpy().transpose((1, 2, 0)),
+            sign="absolute_value",
+            outlier_perc=2,
+        )
+        ig_img = get_heatmap(ig_norm_attr)
+
+        return [
+            {
+                "prob": score.max(),
+                "cam_image": encode_image(cam_img),
+                "gc_image": encode_image(gc_img),
+                "ig_image": encode_image(ig_img),
+            }
+        ]

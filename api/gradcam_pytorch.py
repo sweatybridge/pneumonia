@@ -47,8 +47,15 @@ class ModelOutputs:
             if module == self.feature_module:
                 target_activations, x = self.feature_extractor(x)
             elif "avgpool" in name.lower().replace("_", ""):
+                # As defined in resnet forward pass
                 x = module(x)
                 x = x.view(x.size(0), -1)
+            elif "classifier" in name.lower():
+                # As defined in DenseNet forward pass
+                x = torch.nn.functional.relu(x, inplace=True)
+                x = torch.nn.functional.adaptive_avg_pool2d(x, (1, 1))
+                x = torch.flatten(x, 1)
+                x = module(x)
             else:
                 x = module(x)
 
@@ -102,7 +109,7 @@ class GradCam:
             cam += w * target[i, :, :]
 
         cam = np.maximum(cam, 0)
-        cam = cv2.resize(cam, inputs.shape[2:])
+        cam = cv2.resize(cam, (inputs.shape[3], inputs.shape[2]))
         cam = cam - np.min(cam)
         cam = cam / np.max(cam)
         return cam, output
