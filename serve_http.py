@@ -66,22 +66,22 @@ def predict(proc_image):
         sign="absolute_value",
         outlier_perc=2,
     )
-    gc_img = get_heatmap(gc_norm_attr)
+    gc_img = superimpose_heatmap(img, gc_norm_attr)
 
     # IntegratedGradients
-    ig_attribution = IG.attribute(proc_image, target=target, n_steps=20)
-    ig_norm_attr = visualization._normalize_image_attr(
-        ig_attribution.detach().squeeze().cpu().numpy().transpose((1, 2, 0)),
-        sign="absolute_value",
-        outlier_perc=2,
-    )
-    ig_img = get_heatmap(ig_norm_attr)
+    # ig_attribution = IG.attribute(proc_image, target=target, n_steps=20)
+    # ig_norm_attr = visualization._normalize_image_attr(
+    #     ig_attribution.detach().squeeze().cpu().numpy().transpose((1, 2, 0)),
+    #     sign="absolute_value",
+    #     outlier_perc=2,
+    # )
+    # ig_img = get_heatmap(ig_norm_attr)
 
     return {
         "prob": score.max().item(),
         "cam_image": encode_image(cam_img),
         "gc_image": encode_image(gc_img),
-        "ig_image": encode_image(ig_img),
+        # "ig_image": encode_image(ig_img),
     }
 
 
