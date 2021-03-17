@@ -2,8 +2,8 @@
 Streamlit app
 """
 import json
-from io import BytesIO
 from os import getenv
+from concurrent.futures import ThreadPoolExecutor, wait
 
 import requests
 import pandas as pd
@@ -78,9 +78,9 @@ def show_results(panel, sample):
     panel.image(sample["ig_image"], caption="Integrated Gradients Image", width=300)
 
 
-@st.cache
+# @st.cache
 def get_results(url, img):
-    resp = requests.post(url, files={"image": img}, timeout=30)
+    resp = requests.post(url, files={"image": img}, timeout=20)
     resp.raise_for_status()
     sample = resp.json()
     sample["cam_image"] = decode_image(sample["cam_image"])
@@ -114,12 +114,17 @@ def image_recognize():
     select_ep = st.sidebar.multiselect("Choose model endpoints", endpoints, endpoints)
 
     if uploaded_file is not None:
-        image = Image.open(uploaded_file)
+        cache = f"/tmp/{uploaded_file.name}"
+        with open(cache, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        image = Image.open(cache)
         st.image(image, caption="Uploaded Image", width=400)
-        buffered = BytesIO()
-        image.save(buffered, format="png")
         # Parallelize over thread pool
-        result = [get_results(f"https://{fqdn}", buffered) for fqdn in select_ep]
+        futures = [
+            EXECUTOR.submit(get_results, f"https://{fqdn}", open(cache, "rb"))
+            for fqdn in select_ep
+        ]
+        result, _ = wait(futures)
     else:
         sample = samples[select_ex]
         left, right = st.beta_columns((3, 2))

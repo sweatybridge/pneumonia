@@ -35,8 +35,8 @@ def predict():
     features = current_app.model.pre_process(
         http_body=request.data, files=request.files
     )
-    score = current_app.model.predict(features=features)
-    return current_app.model.post_process(score=score, prediction_id=None)
+    return current_app.model.predict(features=features)
+    # return current_app.model.post_process(score=score, prediction_id=None)
 
 
 @app.route("/metrics", methods=["GET"])
