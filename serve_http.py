@@ -9,7 +9,7 @@ import numpy as np
 from torch.nn import functional as F
 from torchvision import transforms
 from flask import Flask, request
-from captum.attr import GuidedGradCam, IntegratedGradients
+from captum.attr import GuidedGradCam, IntegratedGradients, visualization
 
 from gradcam_pytorch import GradCam
 from utils import CustomSEResNeXt
@@ -18,7 +18,6 @@ from utils_image import (
     decode_image,
     superimpose_heatmap,
     get_heatmap,
-    normalize_image_attr,
 )
 
 MODEL_DIR = "/artefact/"
@@ -52,13 +51,6 @@ GUIDED_GC = GuidedGradCam(MODEL.model, MODEL.model.layer4)
 IG = IntegratedGradients(MODEL.model)
 
 
-def process_image(image):
-    """Process image."""
-    proc_image = PROCESS(image)
-    proc_image = proc_image.unsqueeze(0).to(DEVICE)
-    return proc_image
-
-
 def predict(proc_image):
     """Perform XAI."""
     # Grad-CAM
@@ -69,7 +61,7 @@ def predict(proc_image):
     # Guided Grad-CAM
     target = score.argmax()
     gc_attribution = GUIDED_GC.attribute(proc_image, target=target)
-    gc_norm_attr = normalize_image_attr(
+    gc_norm_attr = visualization._normalize_image_attr(
         gc_attribution.detach().squeeze().cpu().numpy().transpose((1, 2, 0)),
         sign="absolute_value",
         outlier_perc=2,
@@ -78,7 +70,7 @@ def predict(proc_image):
 
     # IntegratedGradients
     ig_attribution = IG.attribute(proc_image, target=target, n_steps=20)
-    ig_norm_attr = normalize_image_attr(
+    ig_norm_attr = visualization._normalize_image_attr(
         ig_attribution.detach().squeeze().cpu().numpy().transpose((1, 2, 0)),
         sign="absolute_value",
         outlier_perc=2,
@@ -104,7 +96,7 @@ def get_prob():
     img = cv2.imdecode(img, cv2.IMREAD_ANYCOLOR)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     # image = decode_image(request.json["encoded_image"])
-    proc_image = process_image(img)
+    proc_image = PROCESS(img).unsqueeze(0).to(DEVICE)
     output = predict(proc_image)
     return output
 

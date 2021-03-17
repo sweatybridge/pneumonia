@@ -40,7 +40,7 @@ def superimpose_heatmap(img, mask):
     heatmap = cv2.applyColorMap(np.uint8(mask * 255), cv2.COLORMAP_JET)
     new_img = np.float32(heatmap) / 255 + np.float32(img)
     new_img = new_img / np.max(new_img)
-    new_img = np.uint8(255 * new_img)
+    new_img = np.uint8(new_img * 255)
     return Image.fromarray(new_img)
 
 
@@ -103,4 +103,5 @@ def deprocess_image(img):
     img = img * 0.05
     img = img + 0.5
     img = np.clip(img, 0, 1)
-    return np.clip(img * 255, 0, 255).astype('uint8')
+    return np.uint8(img * 255)
+    # return np.clip(img * 255, 0, 255).astype('uint8')
