@@ -78,7 +78,7 @@ def predict(proc_image):
     # ig_img = get_heatmap(ig_norm_attr)
 
     return {
-        "prob": score.max().item(),
+        "prob": F.softmax(score, dim=1).detach().numpy()[0, 1].item(),
         "cam_image": encode_image(cam_img),
         "gc_image": encode_image(gc_img),
         # "ig_image": encode_image(ig_img),
