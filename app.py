@@ -15,6 +15,7 @@ from utils_image import encode_image, decode_image
 DATA_DIR = "test_images/"
 RESULT_DIR = "assets/"
 API_TOKEN = getenv("API_TOKEN", "")
+EXECUTOR = ThreadPoolExecutor(max_workers=4)
 
 
 @st.cache
