@@ -79,7 +79,8 @@ def show_results(panel, sample):
 
 @st.cache
 def get_results(url, img):
-    resp = requests.post(url, files={"image": img}, timeout=30, raise_for_status=True)
+    resp = requests.post(url, files={"image": img}, timeout=30)
+    resp.raise_for_status()
     sample = resp.json()
     sample["cam_image"] = decode_image(sample["cam_image"])
     sample["gc_image"] = decode_image(sample["gc_image"])
