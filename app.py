@@ -2,6 +2,7 @@
 Streamlit app
 """
 import json
+from io import BytesIO
 from os import getenv
 
 import requests
@@ -115,8 +116,10 @@ def image_recognize():
     if uploaded_file is not None:
         image = Image.open(uploaded_file)
         st.image(image, caption="Uploaded Image", width=400)
+        buffered = BytesIO()
+        image.save(buffered, format="png")
         # Parallelize over thread pool
-        result = [get_results(f"https://{fqdn}", uploaded_file) for fqdn in select_ep]
+        result = [get_results(f"https://{fqdn}", buffered) for fqdn in select_ep]
     else:
         sample = samples[select_ex]
         left, right = st.beta_columns((3, 2))
