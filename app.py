@@ -72,13 +72,6 @@ def recognize(image, url, token):
     return response.json()
 
 
-def show_results(panel, sample):
-    # panel.subheader(f"`{prob:.2f}%`")
-    panel.image(sample["cam_image"], caption="Grad-CAM Image", width=300)
-    panel.image(sample["gc_image"], caption="Guided Grad-CAM Image", width=300)
-    panel.image(sample["ig_image"], caption="Integrated Gradients Image", width=300)
-
-
 # @st.cache
 def get_results(url, img):
     resp = requests.post(url, files={"image": img}, timeout=20)
@@ -112,7 +105,7 @@ def image_recognize():
     samples = load_samples()
     select_ex = st.sidebar.selectbox("Select a sample image.", list(samples.keys()))
     uploaded_file = st.sidebar.file_uploader("Or upload an image.")
-    select_ep = st.sidebar.multiselect("Choose model endpoints", endpoints, endpoints)
+    select_ep = st.sidebar.multiselect("Choose model endpoints.", endpoints, endpoints)
 
     if uploaded_file is not None:
         cache = f"/tmp/{uploaded_file.name}"
@@ -142,12 +135,11 @@ def image_recognize():
 
         result = [sample for _ in select_ep]
 
-    # p_cols = st.beta_columns(len(endpoints) + 1)
     st.header("Probability of having COVID-19")
     p_cols = st.beta_columns(len(select_ep))
-    for i, c in enumerate(p_cols):
-        prob = result[i]["prob"] * 100
-        c.subheader(f"{endpoints[i].split('.')[0]}: `{prob:.2f}%`")
+    for col, sample, fqdn in zip(p_cols, result, select_ep):
+        prob = sample["prob"] * 100
+        col.subheader(f"{fqdn.split('.')[0]}: `{prob:.2f}%`")
 
     st.header("Explainability")
     st.write("Methods: Grad-CAM, Guided Grad-CAM and Integrated Gradients")
@@ -156,8 +148,10 @@ def image_recognize():
         "Convolutional Neural Network-based models."
     )
     e_cols = st.beta_columns(len(select_ep))
-    for c in e_cols:
-        show_results(c, result[i])
+    for col, sample in zip(e_cols, result):
+        col.image(sample["cam_image"], caption="Grad-CAM Image", width=300)
+        col.image(sample["gc_image"], caption="Guided Grad-CAM Image", width=300)
+        col.image(sample["ig_image"], caption="Integrated Gradients Image", width=300)
 
 
 if __name__ == "__main__":
