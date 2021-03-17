@@ -79,7 +79,7 @@ def get_results(url, img):
     sample = resp.json()
     sample["cam_image"] = decode_image(sample["cam_image"])
     sample["gc_image"] = decode_image(sample["gc_image"])
-    sample["ig_image"] = decode_image(sample["ig_image"])
+    # sample["ig_image"] = decode_image(sample["ig_image"])
     return sample
 
 
@@ -136,23 +136,25 @@ def image_recognize():
 
         result = [sample for _ in select_ep]
 
-    st.header("Probability of having COVID-19")
+    st.header("Predictions")
     p_cols = st.beta_columns(len(select_ep))
+    # p_cols[0].header("Model Confidence")
     for col, sample, fqdn in zip(p_cols, result, select_ep):
         prob = sample["prob"] * 100
-        col.subheader(f"{fqdn.split('.')[0]}: `{prob:.2f}%`")
+        col.subheader(f"{fqdn.split('.')[0]}: `{prob:.2f}%` ({'High Risk' if prob > 50 else 'Low Risk'})")
 
-    st.header("Explainability")
-    st.write("Methods: Grad-CAM, Guided Grad-CAM and Integrated Gradients")
-    st.write(
-        "To visualise the regions of input that are 'important' for predictions from "
-        "Convolutional Neural Network-based models."
-    )
+    # st.header("Explainability")
+    # st.write("Methods: Grad-CAM, Guided Grad-CAM and Integrated Gradients")
+    # st.write(
+    #     "To visualise the regions of input that are 'important' for predictions from "
+    #     "Convolutional Neural Network-based models."
+    # )
     e_cols = st.beta_columns(len(select_ep))
+    # e_cols[0].header("Explainability")
     for col, sample in zip(e_cols, result):
         col.image(sample["cam_image"], caption="Grad-CAM Image", width=300)
         col.image(sample["gc_image"], caption="Guided Grad-CAM Image", width=300)
-        col.image(sample["ig_image"], caption="Integrated Gradients Image", width=300)
+        # col.image(sample["ig_image"], caption="Integrated Gradients Image", width=300)
 
 
 if __name__ == "__main__":
