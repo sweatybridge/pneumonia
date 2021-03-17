@@ -118,7 +118,8 @@ def image_recognize():
             EXECUTOR.submit(get_results, f"https://{fqdn}", open(cache, "rb"))
             for fqdn in select_ep
         ]
-        result, _ = wait(futures)
+        _ = wait(futures)
+        result = [f.result() for f in futures]
     else:
         sample = samples[select_ex]
         left, right = st.beta_columns((3, 2))
