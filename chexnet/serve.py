@@ -80,14 +80,9 @@ class Model(BaseModel):
             torch.backends.cudnn.benchmark = True
 
         self.transform = Compose(
-            [
-                ToPILImage(),
-                Resize(256),
-                CenterCrop(224),
-                ToTensor(),
-                Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ]
+            [ToPILImage(), Resize(256), CenterCrop(224), ToTensor()]
         )
+        self.norm = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
         self.grad_cam = GradCam(
             model=self.model,
@@ -104,14 +99,14 @@ class Model(BaseModel):
         img = np.frombuffer(files["image"].read(), dtype=np.uint8)
         img = cv2.imdecode(img, cv2.IMREAD_ANYCOLOR)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        return [img]
+        features = self.transform(img).to(self.device)
+        return features.unsqueeze(0)
 
     def predict(self, features):
         """Perform XAI."""
         # Grad-CAM
-        img = features[0].copy()
-        features = self.transform(img).to(self.device).unsqueeze(0)
-        img = np.float32(img) / 255
+        img = features.detach().numpy().squeeze().transpose((1, 2, 0))
+        features = self.norm(features)
         mask, score = self.grad_cam(features)
         mask = cv2.resize(mask, (img.shape[1], img.shape[0]))
         cam_img = superimpose_heatmap(img, mask)
