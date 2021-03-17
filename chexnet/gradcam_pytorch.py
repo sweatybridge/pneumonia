@@ -4,7 +4,7 @@ import torch
 from torch.autograd import Function
 
 
-class FeatureExtractor:
+class FeatureExtractor():
     """ Class for extracting activations and
     registering gradients from targetted intermediate layers """
 
@@ -27,7 +27,7 @@ class FeatureExtractor:
         return outputs, x
 
 
-class ModelOutputs:
+class ModelOutputs():
     """ Class for making a forward pass, and getting:
     1. The network output.
     2. Activations from intermeddiate targetted layers.
@@ -73,25 +73,25 @@ class GradCam:
 
         self.extractor = ModelOutputs(self.model, self.feature_module, target_layer_names)
 
-    def forward(self, inputs):
-        return self.model(inputs)
+    def forward(self, input_img):
+        return self.model(input_img)
 
-    def __call__(self, inputs, index=None):
+    def __call__(self, input_img, target_category=None):
         if self.cuda:
-            features, output = self.extractor(inputs.cuda())
-        else:
-            features, output = self.extractor(inputs)
+            input_img = input_img.cuda()
 
-        if index is None:
-            index = np.argmax(output.cpu().data.numpy())
+        features, output = self.extractor(input_img)
+
+        if target_category == None:
+            target_category = np.argmax(output.cpu().data.numpy())
 
         one_hot = np.zeros((1, output.size()[-1]), dtype=np.float32)
-        one_hot[0][index] = 1
+        one_hot[0][target_category] = 1
         one_hot = torch.from_numpy(one_hot).requires_grad_(True)
         if self.cuda:
-            one_hot = torch.sum(one_hot.cuda() * output)
-        else:
-            one_hot = torch.sum(one_hot * output)
+            one_hot = one_hot.cuda()
+
+        one_hot = torch.sum(one_hot * output)
 
         self.feature_module.zero_grad()
         self.model.zero_grad()
@@ -109,7 +109,7 @@ class GradCam:
             cam += w * target[i, :, :]
 
         cam = np.maximum(cam, 0)
-        cam = cv2.resize(cam, (inputs.shape[3], inputs.shape[2]))
+        cam = cv2.resize(cam, input_img.shape[2:])
         cam = cam - np.min(cam)
         cam = cam / np.max(cam)
         return cam, output
@@ -117,29 +117,23 @@ class GradCam:
 
 class GuidedBackpropReLU(Function):
     @staticmethod
-    def forward(self, inputs):
-        positive_mask = (inputs > 0).type_as(inputs)
-        output = torch.addcmul(torch.zeros(inputs.size()).type_as(inputs), inputs, positive_mask)
-        self.save_for_backward(inputs, output)
+    def forward(self, input_img):
+        positive_mask = (input_img > 0).type_as(input_img)
+        output = torch.addcmul(torch.zeros(input_img.size()).type_as(input_img), input_img, positive_mask)
+        self.save_for_backward(input_img, output)
         return output
 
     @staticmethod
     def backward(self, grad_output):
-        inputs, output = self.saved_tensors
-        grad_inputs = None
+        input_img, output = self.saved_tensors
+        grad_input = None
 
-        positive_mask_1 = (inputs > 0).type_as(grad_output)
+        positive_mask_1 = (input_img > 0).type_as(grad_output)
         positive_mask_2 = (grad_output > 0).type_as(grad_output)
-        grad_inputs = torch.addcmul(
-            torch.zeros(inputs.size()).type_as(inputs),
-            torch.addcmul(
-                torch.zeros(inputs.size()).type_as(inputs),
-                grad_output,
-                positive_mask_1,
-            ),
-            positive_mask_2,
-        )
-        return grad_inputs
+        grad_input = torch.addcmul(torch.zeros(input_img.size()).type_as(input_img),
+                                   torch.addcmul(torch.zeros(input_img.size()).type_as(input_img), grad_output,
+                                                 positive_mask_1), positive_mask_2)
+        return grad_input
 
 
 class GuidedBackpropReLUModel:
@@ -159,31 +153,30 @@ class GuidedBackpropReLUModel:
         # replace ReLU with GuidedBackpropReLU
         recursive_relu_apply(self.model)
 
-    def forward(self, inputs):
-        return self.model(inputs)
+    def forward(self, input_img):
+        return self.model(input_img)
 
-    def __call__(self, inputs, index=None):
+    def __call__(self, input_img, target_category=None):
         if self.cuda:
-            output = self.forward(inputs.cuda())
-        else:
-            output = self.forward(inputs)
+            input_img = input_img.cuda()
 
-        if index is None:
-            index = np.argmax(output.cpu().data.numpy())
+        input_img = input_img.requires_grad_(True)
+
+        output = self.forward(input_img)
+
+        if target_category == None:
+            target_category = np.argmax(output.cpu().data.numpy())
 
         one_hot = np.zeros((1, output.size()[-1]), dtype=np.float32)
-        one_hot[0][index] = 1
+        one_hot[0][target_category] = 1
         one_hot = torch.from_numpy(one_hot).requires_grad_(True)
         if self.cuda:
-            one_hot = torch.sum(one_hot.cuda() * output)
-        else:
-            one_hot = torch.sum(one_hot * output)
+            one_hot = one_hot.cuda()
 
-        # self.model.features.zero_grad()
-        # self.model.classifier.zero_grad()
+        one_hot = torch.sum(one_hot * output)
         one_hot.backward(retain_graph=True)
 
-        output = inputs.grad.cpu().data.numpy()
+        output = input_img.grad.cpu().data.numpy()
         output = output[0, :, :, :]
 
         return output

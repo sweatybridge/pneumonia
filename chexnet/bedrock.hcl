@@ -3,10 +3,10 @@ version = "1.0"
 serve {
     image = "quay.io/basisai/express-flask:v0.0.4-opencv"
     install = [
-        "pip install -r /model-server/api/requirements.txt"
+        "pip install -r /model-server/chexnet/requirements.txt"
     ]
     script = [{sh = [
-        "cd /model-server/api",
+        "cd /model-server/chexnet",
         "/app/entrypoint.sh"
     ]}]
 

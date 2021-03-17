@@ -6,8 +6,7 @@ import cv2
 import numpy as np
 import torch
 from bedrock_client.bedrock.model import BaseModel
-from captum.attr import GuidedGradCam, IntegratedGradients
-from prometheus_client import Gauge
+from captum.attr import GuidedGradCam, IntegratedGradients, visualization
 from torchvision.models import densenet121
 from torchvision.transforms import (
     CenterCrop,
@@ -24,11 +23,7 @@ from utils_image import (
     decode_image,
     superimpose_heatmap,
     get_heatmap,
-    normalize_image_attr,
 )
-
-backlog_length_gauge = Gauge("inference_backlog_length", "Length of inference backlog")
-max_batch_size = 32
 
 
 class Model(BaseModel):
@@ -83,7 +78,6 @@ class Model(BaseModel):
 
         if self.device.type == "cuda":
             torch.backends.cudnn.benchmark = True
-            # self.model.half()
 
         self.transform = Compose(
             [
@@ -110,27 +104,22 @@ class Model(BaseModel):
         img = np.frombuffer(files["image"].read(), dtype=np.uint8)
         img = cv2.imdecode(img, cv2.IMREAD_ANYCOLOR)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        features = self.transform(img).to(self.device)
-        # if self.device.type == "cuda":
-        #     features = features.half()
-        return features.unsqueeze(0)
-
-    @torch.no_grad()
-    def _predict(self, features):
-        score = self.model(features).softmax(dim=1).max(dim=1)
-        return [{"type": score.indices[0].item(), "conf": score.values[0].item()}]
+        return [img]
 
     def predict(self, features):
         """Perform XAI."""
         # Grad-CAM
-        img = features.detach().numpy().squeeze().transpose((1, 2, 0))
+        img = features[0].copy()
+        features = self.transform(img).to(self.device).unsqueeze(0)
+        img = np.float32(img) / 255
         mask, score = self.grad_cam(features)
+        mask = cv2.resize(mask, (img.shape[1], img.shape[0]))
         cam_img = superimpose_heatmap(img, mask)
 
         # Guided Grad-CAM
         target = score.argmax()
         gc_attribution = self.guided_gc.attribute(features, target=target)
-        gc_norm_attr = normalize_image_attr(
+        gc_norm_attr = visualization._normalize_image_attr(
             gc_attribution.detach().squeeze().cpu().numpy().transpose((1, 2, 0)),
             sign="absolute_value",
             outlier_perc=2,
@@ -139,7 +128,7 @@ class Model(BaseModel):
 
         # IntegratedGradients
         ig_attribution = self.ig.attribute(features, target=target, n_steps=20)
-        ig_norm_attr = normalize_image_attr(
+        ig_norm_attr = visualization._normalize_image_attr(
             ig_attribution.detach().squeeze().cpu().numpy().transpose((1, 2, 0)),
             sign="absolute_value",
             outlier_perc=2,
