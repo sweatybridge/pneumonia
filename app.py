@@ -162,8 +162,8 @@ def image_recognize():
 
         result = []
         for fqdn in select_ep:
-            domain = fqdn.split(".")[0]
-            targets = model_info[domain]
+            model_name = fqdn.split(".")[0]
+            targets = model_info[model_name]
             result.append({k: str_to_float(k + str(select_ex)) for k in targets})
 
     # Draw patient metadata
@@ -177,8 +177,8 @@ def image_recognize():
 
     columns = set(k for r in result for k in r.keys())
     for i, r in enumerate(result):
-        domain = select_ep[i].split(".")[0]
-        r["Model"] = domain
+        model_name = select_ep[i].split(".")[0]
+        r["Model"] = model_name
 
     # Draw summary table
     st.header("Model Predictions")
@@ -209,7 +209,7 @@ def image_recognize():
             futures = [
                 EXECUTOR.submit(get_heatmap, fqdn, open(cache, "rb"))
                 for fqdn in select_ep
-                if select_target in model_info[fqdn]
+                if select_target in model_info[fqdn.split(".")[0]]
             ]
             _ = wait(futures)
             result = [f.result() for f in futures]
