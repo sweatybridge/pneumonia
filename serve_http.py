@@ -110,15 +110,16 @@ app = Flask(__name__)
 
 
 @app.route("/", methods=["POST"])
+@app.route("/predict", methods=["POST"])
 def get_prob():
     """Returns probability."""
     features = pre_process(request.files)
     return predict(features)
 
 
-@app.route("/explain/", defaults={"target": None})
+@app.route("/explain/", defaults={"target": None}, methods=["POST"])
 @app.route("/explain/<target>", methods=["POST"])
-def explain(target):
+def get_heatmap(target):
     features = pre_process(request.files)
     if target is not None:
         target = _get_target_index(target)

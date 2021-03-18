@@ -31,6 +31,7 @@ def init_background_threads():
 
 
 @app.route("/", methods=["POST"])
+@app.route("/predict", methods=["POST"])
 def predict():
     features = current_app.model.pre_process(
         http_body=request.data, files=request.files
@@ -39,7 +40,7 @@ def predict():
     # return current_app.model.post_process(score=score, prediction_id=None)
 
 
-@app.route("/explain/", defaults={"target": None})
+@app.route("/explain/", defaults={"target": None}, methods=["POST"])
 @app.route("/explain/<target>", methods=["POST"])
 def explain(target):
     features = current_app.model.pre_process(
