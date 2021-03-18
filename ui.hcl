@@ -1,7 +1,7 @@
 version = "1.0"
 
 serve {
-    image = "python:3.7.9"
+    image = "python:3.9.2"
     install = [
         "pip install -r requirements.txt"
     ]

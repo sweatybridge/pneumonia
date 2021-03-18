@@ -101,19 +101,24 @@ def recognize(image, url, token):
 
 
 def get_heatmap(fqdn, img, target=None):
-    path = "/explain" if target is None else f"/explain/{target}"
-    resp = requests.post(f"https://{fqdn}{path}", files={"image": img}, timeout=20)
+    scheme = "https" if "." in fqdn else "http"
+    path = "explain" if target is None else f"explain/{target}"
+    resp = requests.post(f"{scheme}://{fqdn}/{path}", files={"image": img}, timeout=20)
     resp.raise_for_status()
     sample = resp.json()
     sample["cam_image"] = decode_image(sample["cam_image"])
     sample["gc_image"] = decode_image(sample["gc_image"])
+    sample["model"] = fqdn.split(".")[0]
     return sample
 
 
 def get_results(fqdn, img):
-    resp = requests.post(f"https://{fqdn}", files={"image": img}, timeout=10)
+    scheme = "https" if "." in fqdn else "http"
+    resp = requests.post(f"{scheme}://{fqdn}", files={"image": img}, timeout=10)
     resp.raise_for_status()
-    return resp.json()
+    result = resp.json()
+    result["model"] = fqdn.split(".")[0]
+    return result
 
 
 def get_endpoints():
@@ -122,7 +127,8 @@ def get_endpoints():
         params={"project_id": "ihis-dev"},
         headers={"X-Bedrock-Access-Token": API_TOKEN},
     )
-    return resp.json()["data"] if resp.ok else []
+    localhost = [{"fqdn": "chexnet"}, {"fqdn": "inhouse"}]
+    return resp.json()["data"] if resp.ok else localhost
 
 
 def image_recognize():
@@ -139,7 +145,9 @@ def image_recognize():
     model_info = load_models()
     select_ex = st.sidebar.selectbox("Select a sample image.", list(samples.keys()))
     uploaded_file = st.sidebar.file_uploader("Or upload an image.")
-    select_ep = st.sidebar.multiselect("Choose model endpoints.", endpoints, endpoints)
+    # select_ep = st.sidebar.multiselect("Choose model endpoints.", endpoints, endpoints)
+    st.sidebar.markdown("Available Endpoints")
+    check_ep = [st.sidebar.checkbox(fqdn, value=True) for fqdn in endpoints]
 
     left, right = st.beta_columns((3, 2))
     if uploaded_file is not None:
@@ -148,10 +156,11 @@ def image_recognize():
             f.write(uploaded_file.getbuffer())
         image = Image.open(cache)
         left.image(image, caption="Uploaded Image", width=400)
-
         # Parallelize over thread pool
         futures = [
-            EXECUTOR.submit(get_results, fqdn, open(cache, "rb")) for fqdn in select_ep
+            EXECUTOR.submit(get_results, fqdn, open(cache, "rb"))
+            for fqdn, chosen in zip(endpoints, check_ep)
+            if chosen
         ]
         _ = wait(futures)
         result = [f.result() for f in futures]
@@ -159,14 +168,18 @@ def image_recognize():
         sample = samples[select_ex]
         raw_img = Image.open(DATA_DIR + sample["raw_img"])
         left.image(raw_img, caption="Sample Image", width=400)
-
+        # Create dummy data
         result = []
-        for fqdn in select_ep:
+        for fqdn, chosen in zip(endpoints, check_ep):
             model_name = fqdn.split(".")[0]
+            if not chosen or model_name not in model_info:
+                continue
             targets = model_info[model_name]
-            result.append({k: str_to_float(k + str(select_ex)) for k in targets})
+            r = {k: str_to_float(k + str(select_ex)) for k in targets}
+            r["model"] = model_name
+            result.append(r)
 
-    # Draw patient metadata
+    # Render patient metadata
     right.subheader("Patient Attributes")
     df = pd.DataFrame(
         [("NRIC", "i****ljAlp6KR6x"), ("Gender", ""), ("Age", "-")],
@@ -175,58 +188,69 @@ def image_recognize():
     df.set_index("header", inplace=True)
     right.table(df)
 
-    columns = set(k for r in result for k in r.keys())
-    for i, r in enumerate(result):
-        model_name = select_ep[i].split(".")[0]
-        r["Model"] = model_name
-
-    # Draw summary table
-    st.header("Model Predictions")
+    # Render summary text and table
+    st.header("Model Prediction")
     pred = pd.DataFrame(result)
-    pred.set_index("Model", inplace=True)
+    pred.set_index("model", inplace=True)
     pred *= 100
 
     high_risk = pred[pred > 50].dropna(axis=1, how="all").max()
     for k, v in high_risk.sort_values(ascending=False)[:3].iteritems():
         st.markdown(f"The risk prediction score for `{k}` is {v:.1f}%.")
 
+    exp = st.beta_expander("Confidence by model and target class")
+    left, right = exp.beta_columns(2)
+    left.markdown("**Red**: confidence > 50% (high risk)")
+    right.markdown("**Yellow**: highest class probability")
     table = st.dataframe(
         pred.style.set_precision(1)
         .set_na_rep("-")
         .highlight_max(axis=0)
         .applymap(lambda v: f"color: {'red' if v > 50 else 'black'}")
     )
-    left, right = st.beta_columns(2)
-    left.markdown("**Red**: model confidence > 50% (high risk)")
-    right.markdown("**Yellow**: highest probability across models")
 
-    # Draw heatmap on selection
-    left, right = st.beta_columns((1, 3))
-    left.header("Visualise Heatmap")
-    select_target = right.selectbox("Target class:", [""] + list(columns))
-    if select_target:
-        if uploaded_file is not None:
-            futures = [
-                EXECUTOR.submit(get_heatmap, fqdn, open(cache, "rb"), select_target)
-                for fqdn in select_ep
-                if select_target in model_info[fqdn.split(".")[0]]
-            ]
-            _ = wait(futures)
-            result = [f.result() for f in futures]
-        else:
-            result = [samples[select_ex] for _ in select_ep]
+    # Render heatmap on selection
+    st.text("")  # add margin
+    left, right = st.beta_columns((1, 2))
+    left.header("Heatmap Visualization")
+    columns = set(k for r in result for k in r.keys())
+    select_tg = right.selectbox(
+        "Target class:",
+        [None] + list(columns),
+        format_func=lambda opt: "Auto (top score of each model)" if opt is None else opt,
+    )
 
-        p_cols = st.beta_columns(len(select_ep))
-        for col, sample, fqdn in zip(p_cols, result, select_ep):
+    if uploaded_file is not None:
+        futures = [
+            EXECUTOR.submit(get_heatmap, fqdn, open(cache, "rb"), select_tg)
+            for fqdn, chosen in zip(endpoints, check_ep)
+            if chosen
+            and (select_tg is None or select_tg in model_info[fqdn.split(".")[0]])
+        ]
+        _ = wait(futures)
+        result = [f.result() for f in futures]
+    else:
+        result = []
+        for fqdn, chosen in zip(endpoints, check_ep):
+            if not chosen:
+                continue
+            r = samples[select_ex].copy()
             model_name = fqdn.split(".")[0]
-            prob = sample["prob"] * 100
-            risk = "High Risk" if prob > 50 else "Low Risk"
-            col.subheader(f"{model_name}: `{prob:.2f}%` ({risk})")
+            r["model"] = model_name
+            result.append(r)
 
-        e_cols = st.beta_columns(len(select_ep))
-        for col, sample in zip(e_cols, result):
-            col.image(sample["cam_image"], caption="Grad-CAM Image", width=300)
-            col.image(sample["gc_image"], caption="Guided Grad-CAM Image", width=300)
+    # Layout images
+    p_cols = st.beta_columns(sum(check_ep))
+    for col, sample in zip(p_cols, result):
+        model_name = sample["model"]
+        prob = sample["prob"] * 100
+        if select_tg is None:
+            risk = pred[pred.index == model_name].idxmax(axis=1).iloc[0]
+        else:
+            risk = "High Risk" if prob > 50 else "Low Risk"
+        col.subheader(f"{model_name}: `{prob:.2f}%` ({risk})")
+        col.image(sample["cam_image"], caption="Grad-CAM Image", width=330)
+        col.image(sample["gc_image"], caption="Guided Grad-CAM Image", width=330)
 
 
 if __name__ == "__main__":
