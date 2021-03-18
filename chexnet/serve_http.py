@@ -39,6 +39,15 @@ def predict():
     # return current_app.model.post_process(score=score, prediction_id=None)
 
 
+@app.route("/explain/", defaults={"target": None})
+@app.route("/explain/<target>", methods=["POST"])
+def explain(target):
+    features = current_app.model.pre_process(
+        http_body=request.data, files=request.files
+    )
+    return current_app.model.explain(features=features, target=target)[0]
+
+
 @app.route("/metrics", methods=["GET"])
 def get_metrics():
     return Response(generate_latest(), content_type=CONTENT_TYPE_LATEST)

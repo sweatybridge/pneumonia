@@ -1,8 +1,5 @@
 from io import BytesIO
-from time import sleep
 from unittest import TestCase
-
-from prometheus_client import generate_latest
 
 from serve import Model
 
@@ -10,11 +7,16 @@ soccer = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x1c\x00\x00\x00\x1c\x
 
 
 class TestModelServer(TestCase):
-    def test_validate(self):
-        m = Model()
-        result = m.validate(files={"image": BytesIO(soccer)}, skip_preprocess=True)
+    m = Model()
+
+    def test_predict(self):
+        result = self.m.validate(files={"image": BytesIO(soccer)}, skip_preprocess=True)
         self.assertEqual(len(result["result"]), 1)
-        if hasattr(m, "stop"):
-            m.stop()
-        print(generate_latest().decode())
         print(result)
+
+    def test_explain(self):
+        features = self.m.pre_process(files={"image": BytesIO(soccer)})
+        result = self.m.explain(features=features, target="0")[0]
+        self.assertGreater(result["prob"], 0)
+        result = self.m.explain(features=features, target="Cardiomegaly")[0]
+        self.assertGreater(result["prob"], 0)

@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 import torch
 from bedrock_client.bedrock.model import BaseModel
-from captum.attr import GuidedGradCam, IntegratedGradients, visualization
+from captum.attr import GuidedGradCam, visualization
 from torchvision.models import densenet121
 from torchvision.transforms import (
     CenterCrop,
@@ -93,7 +93,6 @@ class Model(BaseModel):
         self.guided_gc = GuidedGradCam(
             self.model, self.model.features[-2]["denselayer16"].conv2
         )
-        self.ig = IntegratedGradients(self.model)
 
     def pre_process(self, files, http_body=None):
         img = np.frombuffer(files["image"].read(), dtype=np.uint8)
@@ -102,17 +101,39 @@ class Model(BaseModel):
         features = self.transform(img).to(self.device)
         return features.unsqueeze(0)
 
+    @torch.no_grad()
     def predict(self, features):
+        score = self.model(self.norm(features))
+        output = {k: v for k, v in zip(self.CLASS_NAMES, score[0].tolist())}
+        return [output]
+
+    def _get_target_index(self, target):
+        if target.isnumeric():
+            index = int(target)
+            if index < len(self.CLASS_NAMES):
+                return index
+        return self.CLASS_NAMES.index(target)
+
+    def explain(self, features, target):
         """Perform XAI."""
+        if target is not None:
+            target = self._get_target_index(target)
+
         # Grad-CAM
         img = features.detach().numpy().squeeze().transpose((1, 2, 0))
         features = self.norm(features)
-        mask, score = self.grad_cam(features)
+        mask, score = self.grad_cam(features, target_category=target)
         mask = cv2.resize(mask, (img.shape[1], img.shape[0]))
         cam_img = superimpose_heatmap(img, mask)
 
+        # Get the score for target class
+        if target is None:
+            target = score.argmax()
+            prob = score.max().item()
+        else:
+            prob = score[0][target].item()
+
         # Guided Grad-CAM
-        target = score.argmax()
         gc_attribution = self.guided_gc.attribute(features, target=target)
         gc_norm_attr = visualization._normalize_image_attr(
             gc_attribution.detach().squeeze().cpu().numpy().transpose((1, 2, 0)),
@@ -121,20 +142,10 @@ class Model(BaseModel):
         )
         gc_img = superimpose_heatmap(img, gc_norm_attr)
 
-        # IntegratedGradients
-        # ig_attribution = self.ig.attribute(features, target=target, n_steps=20)
-        # ig_norm_attr = visualization._normalize_image_attr(
-        #     ig_attribution.detach().squeeze().cpu().numpy().transpose((1, 2, 0)),
-        #     sign="absolute_value",
-        #     outlier_perc=2,
-        # )
-        # ig_img = get_heatmap(ig_norm_attr)
-
         return [
             {
-                "prob": score.max().item(),
+                "prob": prob,
                 "cam_image": encode_image(cam_img),
                 "gc_image": encode_image(gc_img),
-                # "ig_image": encode_image(ig_img),
             }
         ]

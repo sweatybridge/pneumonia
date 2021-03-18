@@ -9,7 +9,7 @@ import numpy as np
 from torch.nn import functional as F
 from torchvision import transforms
 from flask import Flask, request
-from captum.attr import GuidedGradCam, IntegratedGradients, visualization
+from captum.attr import GuidedGradCam, visualization
 
 from gradcam_pytorch import GradCam
 from utils import CustomSEResNeXt
@@ -31,7 +31,8 @@ MODEL.load_state_dict(
 )
 MODEL.eval()
 
-PROCESS = transforms.Compose(
+CLASS_NAMES = ["Normal", "COVID-19"]
+TRANSFORM = transforms.Compose(
     [
         transforms.ToPILImage(),
         transforms.Resize(256),
@@ -48,19 +49,48 @@ GRAD_CAM = GradCam(
 )
 
 GUIDED_GC = GuidedGradCam(MODEL.model, MODEL.model.layer4)
-IG = IntegratedGradients(MODEL.model)
 
 
-def predict(proc_image):
+def pre_process(files):
+    img = np.frombuffer(files["image"].read(), dtype=np.uint8)
+    img = cv2.imdecode(img, cv2.IMREAD_ANYCOLOR)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    # image = decode_image(request.json["encoded_image"])
+    return TRANSFORM(img).unsqueeze(0).to(DEVICE)
+
+
+@torch.no_grad()
+def predict(features):
+    score = MODEL(features)
+    prob = F.softmax(score, dim=1).detach()[0].tolist()
+    output = {k: v for k, v in zip(CLASS_NAMES, prob)}
+    return output
+
+
+def _get_target_index(target):
+    if target.isnumeric():
+        index = int(target)
+        if index < len(CLASS_NAMES):
+            return index
+    return CLASS_NAMES.index(target)
+
+
+def explain(features, target):
     """Perform XAI."""
     # Grad-CAM
-    img = proc_image.detach().numpy().squeeze().transpose((1, 2, 0))
-    mask, score = GRAD_CAM(proc_image)
+    img = features.detach().numpy().squeeze().transpose((1, 2, 0))
+    mask, score = GRAD_CAM(features, target_category=target)
     cam_img = superimpose_heatmap(img, mask)
 
+    # Get the score for target class
+    if target is None:
+        target = score.argmax()
+        prob = F.softmax(score, dim=1).detach().max().item()
+    else:
+        prob = F.softmax(score, dim=1).detach()[0, target].item()
+
     # Guided Grad-CAM
-    target = score.argmax()
-    gc_attribution = GUIDED_GC.attribute(proc_image, target=target)
+    gc_attribution = GUIDED_GC.attribute(features, target=target)
     gc_norm_attr = visualization._normalize_image_attr(
         gc_attribution.detach().squeeze().cpu().numpy().transpose((1, 2, 0)),
         sign="absolute_value",
@@ -68,20 +98,10 @@ def predict(proc_image):
     )
     gc_img = superimpose_heatmap(img, gc_norm_attr)
 
-    # IntegratedGradients
-    # ig_attribution = IG.attribute(proc_image, target=target, n_steps=20)
-    # ig_norm_attr = visualization._normalize_image_attr(
-    #     ig_attribution.detach().squeeze().cpu().numpy().transpose((1, 2, 0)),
-    #     sign="absolute_value",
-    #     outlier_perc=2,
-    # )
-    # ig_img = get_heatmap(ig_norm_attr)
-
     return {
-        "prob": F.softmax(score, dim=1).detach().numpy()[0, 1].item(),
+        "prob": prob,
         "cam_image": encode_image(cam_img),
         "gc_image": encode_image(gc_img),
-        # "ig_image": encode_image(ig_img),
     }
 
 
@@ -92,13 +112,17 @@ app = Flask(__name__)
 @app.route("/", methods=["POST"])
 def get_prob():
     """Returns probability."""
-    img = np.frombuffer(request.files["image"].read(), dtype=np.uint8)
-    img = cv2.imdecode(img, cv2.IMREAD_ANYCOLOR)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    # image = decode_image(request.json["encoded_image"])
-    proc_image = PROCESS(img).unsqueeze(0).to(DEVICE)
-    output = predict(proc_image)
-    return output
+    features = pre_process(request.files)
+    return predict(features)
+
+
+@app.route("/explain/", defaults={"target": None})
+@app.route("/explain/<target>", methods=["POST"])
+def explain(target):
+    features = pre_process(request.files)
+    if target is not None:
+        target = _get_target_index(target)
+    return explain(features=features, target=target)
 
 
 def main():
