@@ -3,6 +3,7 @@ Streamlit app
 """
 import json
 from os import getenv
+from zlib import crc32
 from concurrent.futures import ThreadPoolExecutor, wait
 
 import requests
@@ -16,6 +17,33 @@ DATA_DIR = "test_images/"
 RESULT_DIR = "assets/"
 API_TOKEN = getenv("API_TOKEN", "")
 EXECUTOR = ThreadPoolExecutor(max_workers=4)
+
+
+def str_to_float(s):
+    return float(crc32(s.encode()) & 0xFFFFFFFF) / 2 ** 32
+
+
+def load_models():
+    model_info = {}
+    model_info["ihis"] = ["Normal", "COVID-19"]
+    model_info["inhouse"] = ["Normal", "COVID-19"]
+    model_info["chexnet"] = [
+        "Atelectasis",
+        "Cardiomegaly",
+        "Effusion",
+        "Infiltration",
+        "Mass",
+        "Nodule",
+        "Pneumonia",
+        "Pneumothorax",
+        "Consolidation",
+        "Edema",
+        "Emphysema",
+        "Fibrosis",
+        "Pleural Thickening",
+        "Hernia",
+    ]
+    return model_info
 
 
 @st.cache
@@ -72,15 +100,20 @@ def recognize(image, url, token):
     return response.json()
 
 
-# @st.cache
-def get_results(url, img):
-    resp = requests.post(url, files={"image": img}, timeout=20)
+def get_heatmap(fqdn, img, target=None):
+    path = "/explain" if target is None else f"/explain/{target}"
+    resp = requests.post(f"https://{fqdn}{path}", files={"image": img}, timeout=20)
     resp.raise_for_status()
     sample = resp.json()
     sample["cam_image"] = decode_image(sample["cam_image"])
     sample["gc_image"] = decode_image(sample["gc_image"])
-    # sample["ig_image"] = decode_image(sample["ig_image"])
     return sample
+
+
+def get_results(fqdn, img):
+    resp = requests.post(f"https://{fqdn}", files={"image": img}, timeout=10)
+    resp.raise_for_status()
+    return resp.json()
 
 
 def get_endpoints():
@@ -103,58 +136,97 @@ def image_recognize():
     ]
 
     samples = load_samples()
+    model_info = load_models()
     select_ex = st.sidebar.selectbox("Select a sample image.", list(samples.keys()))
     uploaded_file = st.sidebar.file_uploader("Or upload an image.")
     select_ep = st.sidebar.multiselect("Choose model endpoints.", endpoints, endpoints)
 
+    left, right = st.beta_columns((3, 2))
     if uploaded_file is not None:
         cache = f"/tmp/{uploaded_file.name}"
         with open(cache, "wb") as f:
             f.write(uploaded_file.getbuffer())
         image = Image.open(cache)
-        st.image(image, caption="Uploaded Image", width=400)
+        left.image(image, caption="Uploaded Image", width=400)
+
         # Parallelize over thread pool
         futures = [
-            EXECUTOR.submit(get_results, f"https://{fqdn}", open(cache, "rb"))
-            for fqdn in select_ep
+            EXECUTOR.submit(get_results, fqdn, open(cache, "rb")) for fqdn in select_ep
         ]
         _ = wait(futures)
         result = [f.result() for f in futures]
     else:
         sample = samples[select_ex]
-        left, right = st.beta_columns((3, 2))
         raw_img = Image.open(DATA_DIR + sample["raw_img"])
         left.image(raw_img, caption="Sample Image", width=400)
 
-        right.subheader("Patient Attributes")
-        df = pd.DataFrame(
-            [("NRIC", "i****ljAlp6KR6x"), ("Gender", ""), ("Age", "-")],
-            columns=["header", "Protected Data"],
-        )
-        df.set_index("header", inplace=True)
-        right.table(df)
+        result = []
+        for fqdn in select_ep:
+            domain = fqdn.split(".")[0]
+            targets = model_info[domain]
+            result.append({k: str_to_float(k + str(select_ex)) for k in targets})
 
-        result = [sample for _ in select_ep]
+    # Draw patient metadata
+    right.subheader("Patient Attributes")
+    df = pd.DataFrame(
+        [("NRIC", "i****ljAlp6KR6x"), ("Gender", ""), ("Age", "-")],
+        columns=["header", "Protected Data"],
+    )
+    df.set_index("header", inplace=True)
+    right.table(df)
 
-    st.header("Predictions")
-    p_cols = st.beta_columns(len(select_ep))
-    # p_cols[0].header("Model Confidence")
-    for col, sample, fqdn in zip(p_cols, result, select_ep):
-        prob = sample["prob"] * 100
-        col.subheader(f"{fqdn.split('.')[0]}: `{prob:.2f}%` ({'High Risk' if prob > 50 else 'Low Risk'})")
+    columns = set(k for r in result for k in r.keys())
+    for i, r in enumerate(result):
+        domain = select_ep[i].split(".")[0]
+        r["Model"] = domain
 
-    # st.header("Explainability")
-    # st.write("Methods: Grad-CAM, Guided Grad-CAM and Integrated Gradients")
-    # st.write(
-    #     "To visualise the regions of input that are 'important' for predictions from "
-    #     "Convolutional Neural Network-based models."
-    # )
-    e_cols = st.beta_columns(len(select_ep))
-    # e_cols[0].header("Explainability")
-    for col, sample in zip(e_cols, result):
-        col.image(sample["cam_image"], caption="Grad-CAM Image", width=300)
-        col.image(sample["gc_image"], caption="Guided Grad-CAM Image", width=300)
-        # col.image(sample["ig_image"], caption="Integrated Gradients Image", width=300)
+    # Draw summary table
+    st.header("Model Predictions")
+    pred = pd.DataFrame(result)
+    pred.set_index("Model", inplace=True)
+    pred *= 100
+
+    high_risk = pred[pred > 50].dropna(axis=1, how="all").max()
+    for k, v in high_risk.sort_values(ascending=False)[:3].iteritems():
+        st.markdown(f"The risk prediction score for `{k}` is {v:.1f}%.")
+
+    table = st.dataframe(
+        pred.style.set_precision(1)
+        .set_na_rep("-")
+        .highlight_max(axis=0)
+        .applymap(lambda v: f"color: {'red' if v > 50 else 'black'}")
+    )
+    left, right = st.beta_columns(2)
+    left.markdown("**Red**: model confidence > 50% (high risk)")
+    right.markdown("**Yellow**: highest probability across models")
+
+    # Draw heatmap on selection
+    left, right = st.beta_columns((1, 3))
+    left.header("Visualise Heatmap")
+    select_target = right.selectbox("Target class:", [""] + list(columns))
+    if select_target:
+        if uploaded_file is not None:
+            futures = [
+                EXECUTOR.submit(get_heatmap, fqdn, open(cache, "rb"))
+                for fqdn in select_ep
+                if select_target in model_info[fqdn]
+            ]
+            _ = wait(futures)
+            result = [f.result() for f in futures]
+        else:
+            result = [samples[select_ex] for _ in select_ep]
+
+        p_cols = st.beta_columns(len(select_ep))
+        for col, sample, fqdn in zip(p_cols, result, select_ep):
+            model_name = fqdn.split(".")[0]
+            prob = sample["prob"] * 100
+            risk = "High Risk" if prob > 50 else "Low Risk"
+            col.subheader(f"{model_name}: `{prob:.2f}%` ({risk})")
+
+        e_cols = st.beta_columns(len(select_ep))
+        for col, sample in zip(e_cols, result):
+            col.image(sample["cam_image"], caption="Grad-CAM Image", width=300)
+            col.image(sample["gc_image"], caption="Guided Grad-CAM Image", width=300)
 
 
 if __name__ == "__main__":
