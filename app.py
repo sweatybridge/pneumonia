@@ -40,7 +40,7 @@ def load_models():
         "Edema",
         "Emphysema",
         "Fibrosis",
-        "Pleural Thickening",
+        "Pleural_Thickening",
         "Hernia",
     ]
     return model_info
@@ -207,7 +207,7 @@ def image_recognize():
     if select_target:
         if uploaded_file is not None:
             futures = [
-                EXECUTOR.submit(get_heatmap, fqdn, open(cache, "rb"))
+                EXECUTOR.submit(get_heatmap, fqdn, open(cache, "rb"), select_target)
                 for fqdn in select_ep
                 if select_target in model_info[fqdn.split(".")[0]]
             ]
