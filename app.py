@@ -5,6 +5,7 @@ import json
 from os import getenv
 from zlib import crc32
 from concurrent.futures import ThreadPoolExecutor, wait
+from urllib.parse import urlparse
 
 import requests
 import pandas as pd
@@ -102,7 +103,7 @@ def recognize(image, url, token):
 
 def get_heatmap(fqdn, img, target=None):
     scheme = "https" if "." in fqdn else "http"
-    path = "explain" if target is None else f"explain/{target}"
+    path = f"explain/{target}" if target else "explain"
     resp = requests.post(f"{scheme}://{fqdn}/{path}", files={"image": img}, timeout=20)
     resp.raise_for_status()
     sample = resp.json()
@@ -131,23 +132,46 @@ def get_endpoints():
     return resp.json()["data"] if resp.ok else localhost
 
 
+def check_endpoint(url):
+    try:
+        # TODO: validate api compatibility
+        resp = requests.get(url, timeout=5)
+        resp.raise_for_status()
+        return True
+    except requests.RequestException as exc:
+        st.warning(exc)
+        return False
+
+
 def image_recognize():
     # st.set_page_config(layout="wide")
     st.title("Chest X-ray Image Classification Demo")
 
+    # Load data
     endpoints = [
         endpoint["fqdn"]
         for endpoint in get_endpoints()
         if ".pub." not in endpoint["fqdn"]
     ]
-
     samples = load_samples()
     model_info = load_models()
+
+    # Render sidebar
     select_ex = st.sidebar.selectbox("Select a sample image.", list(samples.keys()))
     uploaded_file = st.sidebar.file_uploader("Or upload an image.")
     # select_ep = st.sidebar.multiselect("Choose model endpoints.", endpoints, endpoints)
-    st.sidebar.markdown("Available Endpoints")
+    exp_s = st.sidebar.beta_expander("Available Endpoints")
+    external = exp_s.text_input("Enter an external URL.", max_chars=63)
+    st.sidebar.markdown("###")  ## add margin
     check_ep = [st.sidebar.checkbox(fqdn, value=True) for fqdn in endpoints]
+
+    if external:
+        with exp_s:
+            ok = check_endpoint(external)
+        if ok:
+            fqdn = urlparse(external).hostname
+            endpoints.append(fqdn)
+            check_ep.append(st.sidebar.checkbox(fqdn))
 
     left, right = st.beta_columns((3, 2))
     if uploaded_file is not None:
@@ -217,15 +241,14 @@ def image_recognize():
     select_tg = right.selectbox(
         "Target class:",
         [None] + list(columns),
-        format_func=lambda opt: "Auto (top score of each model)" if opt is None else opt,
+        format_func=lambda opt: opt or "Auto (top score of every model)",
     )
 
     if uploaded_file is not None:
         futures = [
             EXECUTOR.submit(get_heatmap, fqdn, open(cache, "rb"), select_tg)
             for fqdn, chosen in zip(endpoints, check_ep)
-            if chosen
-            and (select_tg is None or select_tg in model_info[fqdn.split(".")[0]])
+            if chosen and (not select_tg or select_tg in model_info[fqdn.split(".")[0]])
         ]
         _ = wait(futures)
         result = [f.result() for f in futures]
@@ -244,10 +267,10 @@ def image_recognize():
     for col, sample in zip(p_cols, result):
         model_name = sample["model"]
         prob = sample["prob"] * 100
-        if select_tg is None:
-            risk = pred[pred.index == model_name].idxmax(axis=1).iloc[0]
-        else:
+        if select_tg:
             risk = "High Risk" if prob > 50 else "Low Risk"
+        else:
+            risk = pred[pred.index == model_name].idxmax(axis=1).iloc[0]
         col.subheader(f"{model_name}: `{prob:.2f}%` ({risk})")
         col.image(sample["cam_image"], caption="Grad-CAM Image", width=330)
         col.image(sample["gc_image"], caption="Guided Grad-CAM Image", width=330)
