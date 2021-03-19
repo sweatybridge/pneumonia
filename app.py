@@ -14,7 +14,7 @@ import pandas as pd
 import streamlit as st
 from PIL import Image
 
-from utils_image import encode_image, decode_image
+from inhouse.utils_image import encode_image, decode_image
 
 DATA_DIR = "test_images/"
 RESULT_DIR = "assets/"
