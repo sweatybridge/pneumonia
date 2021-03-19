@@ -257,8 +257,15 @@ def image_recognize():
         for fqdn, chosen in zip(endpoints, check_ep):
             if not chosen:
                 continue
-            r = samples[select_ex].copy()
             model_name = fqdn.split(".")[0]
+            if not select_tg:
+                prob = pred[pred.index == model_name].max(axis=1).iloc[0] / 100
+            elif select_tg in model_info[model_name]:
+                prob = str_to_float(select_tg + str(select_ex))
+            else:
+                continue
+            r = samples[select_ex].copy()
+            r["prob"] = prob
             r["model"] = model_name
             result.append(r)
 
@@ -271,7 +278,7 @@ def image_recognize():
             risk = "High Risk" if prob > 50 else "Low Risk"
         else:
             risk = pred[pred.index == model_name].idxmax(axis=1).iloc[0]
-        col.subheader(f"{model_name}: `{prob:.2f}%` ({risk})")
+        col.subheader(f"{model_name}: `{prob:.1f}%` ({risk})")
         col.image(sample["cam_image"], caption="Grad-CAM Image", width=330)
         col.image(sample["gc_image"], caption="Guided Grad-CAM Image", width=330)
 
