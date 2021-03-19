@@ -2,6 +2,7 @@
 Script for serving.
 """
 import os
+import logging
 
 import cv2
 import torch
@@ -19,6 +20,8 @@ from utils_image import (
     superimpose_heatmap,
     get_heatmap,
 )
+
+LOGGER = logging.getLogger()
 
 MODEL_DIR = "/artefact/"
 if os.path.exists("models/"):
@@ -52,9 +55,16 @@ GUIDED_GC = GuidedGradCam(MODEL.model, MODEL.model.layer4)
 
 
 def pre_process(files):
-    img = np.frombuffer(files["image"].read(), dtype=np.uint8)
-    img = cv2.imdecode(img, cv2.IMREAD_ANYCOLOR)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    if files["image"].filename.lower().endswith(".npy"):
+        img = np.load(files["image"])
+        if len(img.shape) == 2 or (len(img.shape) == 3 and img.shape[0] == 1):
+            # Convert grayscale to rgb
+            img = np.tile(img, (3, 1, 1)).transpose(1, 2, 0)
+    else:
+        # Use opencv to open the image file
+        img = np.frombuffer(files["image"].read(), dtype=np.uint8)
+        img = cv2.imdecode(img, cv2.IMREAD_ANYCOLOR)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     # image = decode_image(request.json["encoded_image"])
     return TRANSFORM(img).unsqueeze(0).to(DEVICE)
 
@@ -91,11 +101,14 @@ def explain(features, target):
 
     # Guided Grad-CAM
     gc_attribution = GUIDED_GC.attribute(features, target=target)
-    gc_norm_attr = visualization._normalize_image_attr(
-        gc_attribution.detach().squeeze().cpu().numpy().transpose((1, 2, 0)),
-        sign="absolute_value",
-        outlier_perc=2,
-    )
+    try:
+        gc_norm_attr = visualization._normalize_image_attr(
+            gc_attribution.detach().squeeze().cpu().numpy().transpose((1, 2, 0)),
+            sign=visualization.VisualizeSign.absolute_value.name,
+        )
+    except AssertionError as exc:
+        LOGGER.warning("Failed to compute guided GC", exc_info=exc)
+        gc_norm_attr = np.zeros(img.shape)
     gc_img = superimpose_heatmap(img, gc_norm_attr)
 
     return {

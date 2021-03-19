@@ -27,7 +27,7 @@ def init_background_threads():
     """Global objects with daemon threads will be stopped by gunicorn --preload flag.
     So instantiate the model monitoring service here instead.
     """
-    current_app.model = Model()
+    current_app.model = Model(logger=logger)
 
 
 @app.route("/", methods=["POST"])

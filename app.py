@@ -7,7 +7,9 @@ from zlib import crc32
 from concurrent.futures import ThreadPoolExecutor, wait
 from urllib.parse import urlparse
 
+import pydicom
 import requests
+import numpy as np
 import pandas as pd
 import streamlit as st
 from PIL import Image
@@ -160,7 +162,7 @@ def image_recognize():
     select_ex = st.sidebar.selectbox("Select a sample image.", list(samples.keys()))
     uploaded_file = st.sidebar.file_uploader("Or upload an image.")
     # select_ep = st.sidebar.multiselect("Choose model endpoints.", endpoints, endpoints)
-    exp_s = st.sidebar.beta_expander("Available Endpoints")
+    exp_s = st.sidebar.beta_expander("Available Model Endpoints")
     external = exp_s.text_input("Enter an external URL.", max_chars=63)
     st.sidebar.markdown("###")  ## add margin
     check_ep = [st.sidebar.checkbox(fqdn, value=True) for fqdn in endpoints]
@@ -178,7 +180,22 @@ def image_recognize():
         cache = f"/tmp/{uploaded_file.name}"
         with open(cache, "wb") as f:
             f.write(uploaded_file.getbuffer())
-        image = Image.open(cache)
+
+        metadata = []
+        if uploaded_file.name.lower().endswith(".dcm"):
+            dcm = pydicom.dcmread(cache)
+            attributes = ["PatientID", "PatientAge", "PatientSex", "StudyDescription", "Modality"]
+            for tag in attributes:
+                if tag not in dcm:
+                    continue
+                metadata.append((tag, getattr(dcm, tag)))
+            image = dcm.pixel_array
+            # .npy extension will be appended by numpy
+            np.save(cache, image)
+            cache += ".npy"
+        else:
+            image = Image.open(cache)
+
         left.image(image, caption="Uploaded Image", width=400)
         # Parallelize over thread pool
         futures = [
@@ -193,6 +210,7 @@ def image_recognize():
         raw_img = Image.open(DATA_DIR + sample["raw_img"])
         left.image(raw_img, caption="Sample Image", width=400)
         # Create dummy data
+        metadata = [("NRIC", "i****ljAlp6KR6x"), ("Gender", ""), ("Age", "-")]
         result = []
         for fqdn, chosen in zip(endpoints, check_ep):
             model_name = fqdn.split(".")[0]
@@ -205,10 +223,7 @@ def image_recognize():
 
     # Render patient metadata
     right.subheader("Patient Attributes")
-    df = pd.DataFrame(
-        [("NRIC", "i****ljAlp6KR6x"), ("Gender", ""), ("Age", "-")],
-        columns=["header", "Protected Data"],
-    )
+    df = pd.DataFrame(metadata, columns=["header", "Protected Data"])
     df.set_index("header", inplace=True)
     right.table(df)
 
@@ -237,7 +252,7 @@ def image_recognize():
     st.text("")  # add margin
     left, right = st.beta_columns((1, 2))
     left.header("Heatmap Visualization")
-    columns = set(k for r in result for k in r.keys())
+    columns = set(k for r in result for k in r.keys() if k != "model")
     select_tg = right.selectbox(
         "Target class:",
         [None] + list(columns),
