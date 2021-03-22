@@ -13,8 +13,8 @@ train {
         resources {
             cpu = "2"
             memory = "12G"
+            gpu = "1"
         }
-        depends_on = ["preprocess"]
     }
 
     parameters {
