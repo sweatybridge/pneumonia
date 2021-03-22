@@ -14,12 +14,7 @@ from captum.attr import GuidedGradCam, visualization
 
 from gradcam_pytorch import GradCam
 from utils import CustomSEResNeXt
-from utils_image import (
-    encode_image,
-    decode_image,
-    superimpose_heatmap,
-    get_heatmap,
-)
+from utils_image import encode_image, superimpose_heatmap
 
 LOGGER = logging.getLogger()
 

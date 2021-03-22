@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from torchvision import transforms
 from google.cloud import storage
-from utils import Rescale, RandomCrop, gcs_imread, gcs_imwrite
+from utils import gcs_imread, gcs_imwrite
 
 PROJECT = os.getenv('PROJECT')
 RAW_DATA_DIR = os.getenv('RAW_DATA_DIR')
@@ -25,8 +25,8 @@ def preprocess():
     read_bucket = client.get_bucket(RAW_BUCKET)
     write_bucket = client.get_bucket(BUCKET)
 
-    transformations = transforms.Compose([Rescale(256),
-                                          RandomCrop(224)])
+    transformations = transforms.Compose([transforms.Rescale(256),
+                                          transforms.RandomSizedCrop(224)])
 
     metadata_df = (
         pd.read_csv(f"gs://{RAW_BUCKET}/{RAW_DATA_DIR}/metadata.csv", usecols=["filename", "view"])
