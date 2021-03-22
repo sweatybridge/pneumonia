@@ -8,10 +8,8 @@ import numpy as np
 import cv2
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset
-from skimage import transform
-
 from pretrainedmodels import se_resnext50_32x4d
+from torch.utils.data import Dataset
 
 
 class ImageDataset(Dataset):

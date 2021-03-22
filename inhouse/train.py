@@ -14,29 +14,29 @@ from torch.nn import functional as F
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
+from torchvision.transforms import Compose, RandomCrop, Resize, ToPILImage, ToTensor
 from bedrock_client.bedrock.api import BedrockApi
 from google.cloud import storage
 from sklearn import metrics
 
-from utils import ImageDataset, ToTensor, CustomSEResNeXt, seed_torch
+from utils import CustomSEResNeXt, ImageDataset, seed_torch
 
-PROJECT = os.getenv('PROJECT')
-RAW_BUCKET = os.getenv('RAW_BUCKET')
-RAW_DATA_DIR = os.getenv('RAW_DATA_DIR')
-BUCKET = os.getenv('BUCKET')
-BASE_DIR = os.getenv('BASE_DIR')
-PREPROCESSED_DIR = os.getenv('PREPROCESSED_DIR')
+PROJECT = os.getenv("PROJECT")
+RAW_BUCKET = os.getenv("RAW_BUCKET")
+RAW_DATA_DIR = os.getenv("RAW_DATA_DIR")
 
 
 # pylint: disable=too-few-public-methods
 class CFG:
     """Configuration."""
+
     lr = 1e-5
     batch_size = 8
     epochs = 20
     n_classes = 2
     pretrained_weights = os.path.join(
-        RAW_DATA_DIR, "pytorch-se-resnext/se_resnext50_32x4d-a260b3a4.pth")
+        RAW_DATA_DIR, "pytorch-se-resnext/se_resnext50_32x4d-a260b3a4.pth"
+    )
     pretrained_model_path = "/artefact/pretrained_model.pth"
     finetuned_model_path = "/artefact/finetuned_model.pth"
 
@@ -47,7 +47,9 @@ def train_fn(model, train_loader, valid_loader, device):
     model.to(device)
 
     optimizer = Adam(model.parameters(), lr=CFG.lr, amsgrad=False)
-    scheduler = ReduceLROnPlateau(optimizer, "min", factor=0.5, patience=2, verbose=True, eps=1e-6)
+    scheduler = ReduceLROnPlateau(
+        optimizer, "min", factor=0.5, patience=2, verbose=True, eps=1e-6
+    )
 
     criterion = nn.CrossEntropyLoss()
     best_loss = np.inf
@@ -57,7 +59,7 @@ def train_fn(model, train_loader, valid_loader, device):
         start_time = time.time()
 
         model.train()
-        avg_loss = 0.
+        avg_loss = 0.0
         y_train = []
         y_preds = []
 
@@ -84,7 +86,7 @@ def train_fn(model, train_loader, valid_loader, device):
         train_acc = metrics.accuracy_score(y_train, y_preds)
 
         model.eval()
-        val_loss = 0.
+        val_loss = 0.0
         y_valid = []
         y_preds = []
 
@@ -107,13 +109,17 @@ def train_fn(model, train_loader, valid_loader, device):
         y_preds = np.concatenate(y_preds)
         valid_acc = metrics.accuracy_score(y_valid, y_preds)
 
-        print(f"Epoch {epoch + 1}/{CFG.epochs}: elapsed time: {time.time() - start_time:.0f}s\n"
-              f"  loss: {avg_loss:.4f}  train_acc: {train_acc:.4f}"
-              f" - val_loss: {val_loss:.4f}  val_acc: {valid_acc:.4f}")
+        print(
+            f"Epoch {epoch + 1}/{CFG.epochs}: elapsed time: {time.time() - start_time:.0f}s\n"
+            f"  loss: {avg_loss:.4f}  train_acc: {train_acc:.4f}"
+            f" - val_loss: {val_loss:.4f}  val_acc: {valid_acc:.4f}"
+        )
 
         if val_loss < best_loss:
-            print(f"Epoch {epoch + 1}: val_loss improved from {best_loss:.5f} to {val_loss:.5f}, "
-                  f"saving model to {CFG.finetuned_model_path}")
+            print(
+                f"Epoch {epoch + 1}: val_loss improved from {best_loss:.5f} to {val_loss:.5f}, "
+                f"saving model to {CFG.finetuned_model_path}"
+            )
             best_loss = val_loss
             torch.save(model.state_dict(), CFG.finetuned_model_path)
         else:
@@ -166,8 +172,7 @@ def compute_log_metrics(y_val, y_prob, y_pred):
     bedrock.log_metric("F1 score", f1_score)
     bedrock.log_metric("ROC AUC", roc_auc)
     bedrock.log_metric("Avg precision", avg_prc)
-    bedrock.log_chart_data(y_val.astype(int).tolist(),
-                           y_prob.flatten().tolist())
+    bedrock.log_chart_data(y_val.astype(int).tolist(), y_prob.flatten().tolist())
 
 
 # pylint: disable=too-many-locals
@@ -175,29 +180,30 @@ def train():
     """Train"""
     client = storage.Client(PROJECT)
     raw_bucket = client.get_bucket(RAW_BUCKET)
-    bucket = client.get_bucket(BUCKET)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"  Device found = {device}")
 
-    metadata_df = (
-        pd.read_csv(f"gs://{RAW_BUCKET}/{RAW_DATA_DIR}/metadata.csv")
-        .query("view == 'PA'")  # taking only PA view
-    )
+    metadata_df = pd.read_csv(f"gs://{RAW_BUCKET}/{RAW_DATA_DIR}/metadata.csv").query(
+        "view == 'PA'"
+    )  # taking only PA view
 
     print("Split train and validation data")
     proc_data = ImageDataset(
-        root_dir=BASE_DIR,
-        image_dir=PREPROCESSED_DIR,
+        root_dir=RAW_DATA_DIR,
+        image_dir="images",
         df=metadata_df,
-        bucket=bucket,
-        transform=ToTensor(),
+        bucket=raw_bucket,
+        transform=Compose([Resize(256), RandomCrop(224), ToTensor()]),
     )
     seed_torch(seed=42)
     valid_size = int(len(proc_data) * 0.2)
     train_data, valid_data = torch.utils.data.random_split(
-        proc_data, [len(proc_data) - valid_size, valid_size])
-    train_loader = DataLoader(train_data, batch_size=CFG.batch_size, shuffle=True, drop_last=True)
+        proc_data, [len(proc_data) - valid_size, valid_size]
+    )
+    train_loader = DataLoader(
+        train_data, batch_size=CFG.batch_size, shuffle=True, drop_last=True
+    )
     valid_loader = DataLoader(valid_data, batch_size=CFG.batch_size, shuffle=False)
 
     print("Train model")
