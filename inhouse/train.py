@@ -194,7 +194,7 @@ def train():
         image_dir="images",
         df=metadata_df,
         bucket=raw_bucket,
-        transform=Compose([Resize(256), RandomCrop(224), ToTensor()]),
+        transform=Compose([ToPILImage(), Resize(256), RandomCrop(224), ToTensor()]),
     )
     seed_torch(seed=42)
     valid_size = int(len(proc_data) * 0.2)
