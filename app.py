@@ -4,6 +4,7 @@ Streamlit app
 import json
 from os import getenv
 from zlib import crc32
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, wait
 from urllib.parse import urlparse
 
@@ -16,8 +17,8 @@ from PIL import Image
 
 from inhouse.utils_image import encode_image, decode_image
 
-DATA_DIR = "test_images/"
-RESULT_DIR = "assets/"
+DATA_DIR = Path("test_images")
+RESULT_DIR = Path("assets")
 API_TOKEN = getenv("API_TOKEN", "")
 EXECUTOR = ThreadPoolExecutor(max_workers=4)
 
@@ -49,44 +50,37 @@ def load_models():
     return model_info
 
 
-@st.cache
 def load_samples():
     config = {
         "ex1": {
             "raw_img": "covid-19-pneumonia-67.jpeg",
             "prob": 0.8808,
-            "can_img": "ex1_cam_img.jpeg",
+            "cam_img": "ex1_cam_img.jpeg",
             "gc_image": "ex1_gc_img.jpeg",
             "ig_image": "ex1_ig_img.jpeg",
         },
         "ex2": {
             "raw_img": "covid-19-caso-82-1-8.png",
             "prob": 0.7102,
-            "can_img": "ex2_cam_img.jpeg",
+            "cam_img": "ex2_cam_img.jpeg",
             "gc_image": "ex2_gc_img.jpeg",
             "ig_image": "ex2_ig_img.jpeg",
         },
         "ex3": {
             "raw_img": "41182_2020_203_Fig4_HTML.jpg",
             "prob": 0.9706,
-            "can_img": "ex3_cam_img.jpeg",
+            "cam_img": "ex3_cam_img.jpeg",
             "gc_image": "ex3_gc_img.jpeg",
             "ig_image": "ex3_ig_img.jpeg",
         },
         "ex4": {
             "raw_img": "pneumococcal-pneumonia-day0.jpg",
             "prob": 0.2417,
-            "can_img": "ex4_cam_img.jpeg",
+            "cam_img": "ex4_cam_img.jpeg",
             "gc_image": "ex4_gc_img.jpeg",
             "ig_image": "ex4_ig_img.jpeg",
         },
     }
-
-    for sample in config.values():
-        sample["cam_image"] = Image.open(RESULT_DIR + sample["can_img"])
-        sample["gc_image"] = Image.open(RESULT_DIR + sample["gc_image"])
-        sample["ig_image"] = Image.open(RESULT_DIR + sample["ig_image"])
-
     return config
 
 
@@ -130,7 +124,7 @@ def get_endpoints():
         params={"project_id": "ihis-dev"},
         headers={"X-Bedrock-Access-Token": API_TOKEN},
     )
-    localhost = [{"fqdn": "chexnet"}, {"fqdn": "inhouse"}]
+    localhost = [{"fqdn": "inhouse"}, {"fqdn": "chexnet"}]
     return resp.json()["data"] if resp.ok else localhost
 
 
@@ -213,7 +207,7 @@ def image_recognize():
         result = [f.result() for f in futures]
     else:
         sample = samples[select_ex]
-        raw_img = Image.open(DATA_DIR + sample["raw_img"])
+        raw_img = Image.open(DATA_DIR / sample["raw_img"])
         left.image(raw_img, caption="Sample Image", width=400)
         # Create dummy data
         metadata = [("NRIC", "i****ljAlp6KR6x"), ("Gender", ""), ("Age", "-")]
@@ -234,12 +228,12 @@ def image_recognize():
     right.table(df)
 
     # Render summary text and table
-    st.header("Model Prediction")
+    st.header("Model Marketplace Predictions")
     pred = pd.DataFrame(result)
     pred.set_index("model", inplace=True)
     pred *= 100
 
-    exp = st.beta_expander("Confidence by model and target class")
+    exp = st.beta_expander("Confidence by model (row) and target class (column)")
     left, right = exp.beta_columns(2)
     left.markdown("**Red**: confidence > 50% (high risk)")
     right.markdown("**Yellow**: highest class probability")
@@ -288,10 +282,19 @@ def image_recognize():
                 prob = str_to_float(select_tg + str(select_ex))
             else:
                 continue
-            r = samples[select_ex].copy()
-            r["prob"] = prob
-            r["model"] = model_name
-            result.append(r)
+            sample = samples[select_ex]
+            result.append(
+                {
+                    "model": model_name,
+                    "prob": prob,
+                    "cam_image": Image.open(
+                        RESULT_DIR / model_name / sample["cam_img"]
+                    ),
+                    "gc_image": Image.open(
+                        RESULT_DIR / model_name / sample["gc_image"]
+                    ),
+                }
+            )
 
     # Layout images
     p_cols = st.beta_columns(sum(check_ep))
