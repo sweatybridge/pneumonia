@@ -147,7 +147,7 @@ def check_endpoint(url):
 
 def image_recognize():
     # st.set_page_config(layout="wide")
-    st.title("Chest X-ray Image Classification Demo")
+    st.title("Chest X-ray Diagnosis Demo")
 
     # Load data
     endpoints = [
@@ -184,7 +184,13 @@ def image_recognize():
         metadata = []
         if uploaded_file.name.lower().endswith(".dcm"):
             dcm = pydicom.dcmread(cache)
-            attributes = ["PatientID", "PatientAge", "PatientSex", "StudyDescription", "Modality"]
+            attributes = [
+                "PatientID",
+                "PatientAge",
+                "PatientSex",
+                "StudyDescription",
+                "Modality",
+            ]
             for tag in attributes:
                 if tag not in dcm:
                     continue
@@ -233,10 +239,6 @@ def image_recognize():
     pred.set_index("model", inplace=True)
     pred *= 100
 
-    high_risk = pred[pred > 50].dropna(axis=1, how="all").max()
-    for k, v in high_risk.sort_values(ascending=False)[:3].iteritems():
-        st.markdown(f"The risk prediction score for `{k}` is {v:.1f}%.")
-
     exp = st.beta_expander("Confidence by model and target class")
     left, right = exp.beta_columns(2)
     left.markdown("**Red**: confidence > 50% (high risk)")
@@ -247,6 +249,13 @@ def image_recognize():
         .highlight_max(axis=0)
         .applymap(lambda v: f"color: {'red' if v > 50 else 'black'}")
     )
+
+    for k, v in pred.idxmax(axis=1).iteritems():
+        s = pred[v].loc[k]
+        st.markdown(f"The risk prediction score by `{k}` model for `{v}` is {s:.1f}%.")
+    # high_risk = pred[pred > 50].dropna(axis=1, how="all").max()
+    # for k, v in high_risk.sort_values(ascending=False)[:3].iteritems():
+    #     st.markdown(f"The risk prediction score for `{k}` is {v:.1f}%.")
 
     # Render heatmap on selection
     st.text("")  # add margin
