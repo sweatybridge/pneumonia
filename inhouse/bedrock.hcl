@@ -2,7 +2,7 @@ version = "1.0"
 
 train {
     step preprocess {
-        image = "basisai/workload-standard:v0.2.2"
+        image = "quay.io/basisai/python-cuda:3.9.2-10.1"
         install = [
             "pip install -r /app/inhouse/requirements-train.txt",
         ]
@@ -17,7 +17,7 @@ train {
     }
 
     step train {
-        image = "basisai/workload-standard:v0.2.2"
+        image = "quay.io/basisai/python-cuda:3.9.2-10.1"
         install = [
             "pip install -r /app/inhouse/requirements-train.txt"
         ]
