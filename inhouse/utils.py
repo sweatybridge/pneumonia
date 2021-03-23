@@ -24,23 +24,20 @@ class ImageDataset(Dataset):
         self.target = target
         # taking only PA view
         meta_path = self.root_dir / "metadata.csv"
-        self.df = pd.read_csv(meta_path).query("view == 'PA'")
+        self.df = pd.read_csv(meta_path).query("finding != 'todo' & view == 'PA'")
 
     def __len__(self):
         return len(self.df)
 
     def __getitem__(self, idx):
-        if torch.is_tensor(idx):
-            idx = idx.tolist()
-
-        file_path = self.root_dir / self.df["folder"].iloc[idx] / self.df["filename"].iloc[idx]
+        data = self.df.iloc[idx]
+        file_path = self.root_dir / data["folder"] / data["filename"]
         image = cv2.imread(str(file_path))
 
         if self.transform:
             image = self.transform(image)
 
-        label = int(self.target in self.df["finding"].iloc[idx])
-
+        label = int(self.target in data["finding"])
         return {"image": image, "label": label}
 
 
