@@ -12,8 +12,7 @@ train {
         script = [{sh = [
             "cd /app/inhouse",
             "git clone --depth 1 https://github.com/ieee8023/covid-chestxray-dataset",
-            "mkdir -p /root/.cache/torch/hub/checkpoints",
-            "curl https://storage.googleapis.com/bedrock-sample/chestxray/pytorch-se-resnext/se_resnext50_32x4d-a260b3a4.pth -o /root/.cache/torch/hub/checkpoints/se_resnext50_32x4d-a260b3a4.pth",
+            "curl https://storage.googleapis.com/bedrock-sample/chestxray/pytorch-se-resnext/se_resnext50_32x4d-a260b3a4.pth",
             "python train.py"
         ]}]
         resources {

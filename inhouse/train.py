@@ -32,7 +32,7 @@ class CFG:
     n_classes = 2
     data_dir = "covid-chestxray-dataset"
     target_class = TARGET_CLASS or "COVID-19"
-    pretrained_weights = "imagenet"
+    pretrained_model_path = "se_resnext50_32x4d-a260b3a4.pth"
     finetuned_model_path = "/artefact/model.pth"
 
 
@@ -193,7 +193,8 @@ def train():
     valid_loader = DataLoader(valid_data, batch_size=CFG.batch_size, shuffle=False)
 
     print("Train model")
-    model = CustomSEResNeXt(n_classes=CFG.n_classes, pretrained=CFG.pretrained_weights)
+    weights torch.load(CFG.pretrained_model_path, map_location=device)
+    model = CustomSEResNeXt(n_classes=CFG.n_classes, weights=weights)
     train_fn(model, train_loader, valid_loader, device)
 
     print("Evaluate")

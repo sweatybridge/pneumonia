@@ -60,10 +60,10 @@ def seed_torch(seed=42):
 class CustomSEResNeXt(nn.Module):
     """CustomSEResNeXt"""
 
-    def __init__(self, n_classes=2, pretrained=None, weights=None):
+    def __init__(self, n_classes=2, weights=None):
         super().__init__()
 
-        self.model = se_resnext50_32x4d(pretrained=pretrained)
+        self.model = se_resnext50_32x4d(pretrained=None)
         if weights is not None:
             self.model.load_state_dict(weights)
 
