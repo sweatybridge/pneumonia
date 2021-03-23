@@ -21,6 +21,7 @@ class ImageDataset(Dataset):
     def __init__(self, root_dir, transform=None, target="COVID-19"):
         self.root_dir = Path(root_dir)
         self.transform = transform
+        self.target = target
         # taking only PA view
         meta_path = self.root_dir / "metadata.csv"
         self.df = pd.read_csv(meta_path).query("view == 'PA'")
@@ -38,7 +39,7 @@ class ImageDataset(Dataset):
         if self.transform:
             image = self.transform(image)
 
-        if self.df["finding"].iloc[idx] != target:
+        if self.df["finding"].iloc[idx] != self.target:
             label = 0
         else:
             label = 1
