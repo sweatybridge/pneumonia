@@ -11,7 +11,7 @@ train {
         ]
         script = [{sh = [
             "cd /app/inhouse",
-            "git clone https://github.com/ieee8023/covid-chestxray-dataset",
+            "git clone --depth 1 https://github.com/ieee8023/covid-chestxray-dataset",
             "python train.py"
         ]}]
         resources {
