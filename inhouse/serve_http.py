@@ -3,6 +3,7 @@ Script for serving.
 """
 import os
 import logging
+from pathlib import Path
 
 import cv2
 import torch
@@ -18,15 +19,11 @@ from utils_image import encode_image, superimpose_heatmap
 
 LOGGER = logging.getLogger()
 
-MODEL_DIR = "/artefact/"
-if os.path.exists("models/"):
-    MODEL_DIR = "models/"
-
 DEVICE = torch.device("cpu")
-MODEL = CustomSEResNeXt(MODEL_DIR + "pretrained_model.pth", DEVICE)
-MODEL.load_state_dict(
-    torch.load(MODEL_DIR + "finetuned_model.pth", map_location=DEVICE)
-)
+MODEL_DIR = Path("models" if os.path.exists("models") else "/artefact")
+WEIGHTS = torch.load(MODEL_DIR / "model.pth", map_location=DEVICE)
+MODEL = CustomSEResNeXt()
+MODEL.load_state_dict(WEIGHTS)
 MODEL.eval()
 
 CLASS_NAMES = ["Normal", "COVID-19"]
