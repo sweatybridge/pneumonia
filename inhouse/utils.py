@@ -21,7 +21,6 @@ class ImageDataset(Dataset):
     def __init__(self, root_dir, transform=None, target="COVID-19"):
         self.root_dir = Path(root_dir)
         self.transform = transform
-        self.bucket = bucket
         # taking only PA view
         meta_path = self.root_dir / "metadata.csv"
         self.df = pd.read_csv(meta_path).query("view == 'PA'")
