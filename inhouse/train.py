@@ -193,7 +193,7 @@ def train():
     valid_loader = DataLoader(valid_data, batch_size=CFG.batch_size, shuffle=False)
 
     print("Train model")
-    weights torch.load(CFG.pretrained_model_path, map_location=device)
+    weights = torch.load(CFG.pretrained_model_path, map_location=device)
     model = CustomSEResNeXt(n_classes=CFG.n_classes, weights=weights)
     train_fn(model, train_loader, valid_loader, device)
 
