@@ -22,9 +22,7 @@ train {
     }
 
     parameters {
-        PROJECT = "span-production"
-        RAW_BUCKET = "bedrock-sample"
-        RAW_DATA_DIR = "chestxray"
+        TARGET_CLASS = "COVID-19"
     }
 }
 
