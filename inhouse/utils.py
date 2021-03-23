@@ -39,10 +39,7 @@ class ImageDataset(Dataset):
         if self.transform:
             image = self.transform(image)
 
-        if self.df["finding"].iloc[idx] != self.target:
-            label = 0
-        else:
-            label = 1
+        label = int(self.target in self.df["finding"].iloc[idx])
 
         return {"image": image, "label": label}
 
