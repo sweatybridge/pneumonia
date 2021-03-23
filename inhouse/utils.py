@@ -33,7 +33,7 @@ class ImageDataset(Dataset):
             idx = idx.tolist()
 
         file_path = self.root_dir / self.df["folder"].iloc[idx] / self.df["filename"].iloc[idx]
-        image = cv2.imread(file_path)
+        image = cv2.imread(str(file_path))
 
         if self.transform:
             image = self.transform(image)
