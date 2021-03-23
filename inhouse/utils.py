@@ -3,9 +3,11 @@ Script containing commonly used functions.
 """
 import os
 import random
+from pathlib import Path
 
-import numpy as np
 import cv2
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 from pretrainedmodels import se_resnext50_32x4d
@@ -16,12 +18,13 @@ class ImageDataset(Dataset):
     """Class for X-ray dataset."""
 
     # pylint: disable=too-many-arguments
-    def __init__(self, root_dir, image_dir, df, transform=None, bucket=None):
-        self.root_dir = root_dir
-        self.image_dir = image_dir
+    def __init__(self, root_dir, transform=None, target="COVID-19"):
+        self.root_dir = Path(root_dir)
         self.transform = transform
         self.bucket = bucket
-        self.df = df
+        # taking only PA view
+        meta_path = self.root_dir / "metadata.csv"
+        self.df = pd.read_csv(meta_path).query("view == 'PA'")
 
     def __len__(self):
         return len(self.df)
@@ -30,18 +33,13 @@ class ImageDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        file_path = os.path.join(
-            self.root_dir, self.image_dir, self.df["filename"].iloc[idx]
-        )
-        if self.bucket is None:
-            image = cv2.imread(file_path)
-        else:
-            image = gcs_imread(self.bucket, file_path)
+        file_path = self.root_dir / self.df["folder"].iloc[idx] / self.df["filename"].iloc[idx]
+        image = cv2.imread(file_path)
 
         if self.transform:
             image = self.transform(image)
 
-        if self.df["finding"].iloc[idx] != "COVID-19":
+        if self.df["finding"].iloc[idx] != target:
             label = 0
         else:
             label = 1
@@ -59,31 +57,15 @@ def seed_torch(seed=42):
     torch.backends.cudnn.deterministic = True
 
 
-def gcs_imread(bucket, blob_path):
-    """Load image from GCS bucket."""
-    blob = bucket.blob(blob_path)
-    image = cv2.imdecode(
-        np.asarray(bytearray(blob.download_as_string()), dtype=np.uint8), 1
-    )
-    return image
-
-
-def gcs_imwrite(bucket, blob_path, filename, image):
-    """Save image to GCS bucket."""
-    cv2.imwrite(filename, image)
-    bucket.blob(blob_path).upload_from_filename(filename)
-
-
 class CustomSEResNeXt(nn.Module):
     """CustomSEResNeXt"""
 
-    def __init__(self, weights_path, device, n_classes=2, save=None):
+    def __init__(self, n_classes=2, pretrained=None, weights=None):
         super().__init__()
 
-        self.model = se_resnext50_32x4d(pretrained=None)
-        self.model.load_state_dict(torch.load(weights_path, map_location=device))
-        if save is not None:
-            torch.save(self.model.state_dict(), save)
+        self.model = se_resnext50_32x4d(pretrained=pretrained)
+        if weights is not None:
+            self.model.load_state_dict(weights)
 
         self.model.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.model.last_linear = nn.Linear(

@@ -4,7 +4,6 @@ Script to train model.
 import logging
 import os
 import time
-from io import BytesIO
 
 import numpy as np
 import pandas as pd
@@ -16,14 +15,11 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, RandomCrop, Resize, ToPILImage, ToTensor
 from bedrock_client.bedrock.api import BedrockApi
-from google.cloud import storage
 from sklearn import metrics
 
 from utils import CustomSEResNeXt, ImageDataset, seed_torch
 
-PROJECT = os.getenv("PROJECT")
-RAW_BUCKET = os.getenv("RAW_BUCKET")
-RAW_DATA_DIR = os.getenv("RAW_DATA_DIR")
+TARGET_CLASS = os.getenv("TARGET_CLASS")
 
 
 # pylint: disable=too-few-public-methods
@@ -34,11 +30,10 @@ class CFG:
     batch_size = 8
     epochs = 20
     n_classes = 2
-    pretrained_weights = os.path.join(
-        RAW_DATA_DIR, "pytorch-se-resnext/se_resnext50_32x4d-a260b3a4.pth"
-    )
-    pretrained_model_path = "/artefact/pretrained_model.pth"
-    finetuned_model_path = "/artefact/finetuned_model.pth"
+    data_dir = "covid-chestxray-dataset"
+    target_class = TARGET_CLASS or "COVID-19"
+    pretrained_weights = "imagenet"
+    finetuned_model_path = "/artefact/model.pth"
 
 
 # pylint: disable=too-many-locals
@@ -178,23 +173,14 @@ def compute_log_metrics(y_val, y_prob, y_pred):
 # pylint: disable=too-many-locals
 def train():
     """Train"""
-    client = storage.Client(PROJECT)
-    raw_bucket = client.get_bucket(RAW_BUCKET)
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"  Device found = {device}")
 
-    metadata_df = pd.read_csv(f"gs://{RAW_BUCKET}/{RAW_DATA_DIR}/metadata.csv").query(
-        "view == 'PA'"
-    )  # taking only PA view
-
     print("Split train and validation data")
     proc_data = ImageDataset(
-        root_dir=RAW_DATA_DIR,
-        image_dir="images",
-        df=metadata_df,
-        bucket=raw_bucket,
+        root_dir=CFG.data_dir,
         transform=Compose([ToPILImage(), Resize(256), RandomCrop(224), ToTensor()]),
+        target=CFG.target_class,
     )
     seed_torch(seed=42)
     valid_size = int(len(proc_data) * 0.2)
@@ -207,13 +193,7 @@ def train():
     valid_loader = DataLoader(valid_data, batch_size=CFG.batch_size, shuffle=False)
 
     print("Train model")
-    se_model_blob = raw_bucket.blob(CFG.pretrained_weights)
-    model = CustomSEResNeXt(
-        BytesIO(se_model_blob.download_as_string()),
-        device,
-        CFG.n_classes,
-        save=CFG.pretrained_model_path,
-    )
+    model = CustomSEResNeXt(n_classes=CFG.n_classes, pretrained=CFG.pretrained_weights)
     train_fn(model, train_loader, valid_loader, device)
 
     print("Evaluate")

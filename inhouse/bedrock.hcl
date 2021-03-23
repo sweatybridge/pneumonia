@@ -4,14 +4,18 @@ train {
     step train {
         image = "quay.io/basisai/python-cuda:3.9.2-10.1"
         install = [
+            "apt-get update",
+            "apt-get install -y git",
+            "rm -rf /var/lib/apt/lists/*",
             "pip install -r /app/inhouse/requirements-train.txt"
         ]
         script = [{sh = [
             "cd /app/inhouse",
+            "git clone https://github.com/ieee8023/covid-chestxray-dataset",
             "python train.py"
         ]}]
         resources {
-            cpu = "2"
+            cpu = "3"
             memory = "12G"
             // gpu = "1"
         }
