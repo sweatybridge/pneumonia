@@ -131,6 +131,11 @@ def get_heatmap(target):
     return explain(features=features, target=target)
 
 
+@app.route("/metrics", methods=["GET"])
+def get_metrics():
+    return "ok"
+
+
 def main():
     """Starts the Http server"""
     app.run()

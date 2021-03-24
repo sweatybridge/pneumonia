@@ -120,18 +120,19 @@ def get_endpoints():
         params={"project_id": "ihis-dev"},
         headers={"X-Bedrock-Access-Token": API_TOKEN},
     )
-    localhost = [{"fqdn": "inhouse"}, {"fqdn": "chexnet"}]
+    localhost = [{"fqdn": "inhouse"}, {"fqdn": "chexnet"}, {"fqdn": "ihis"}]
     return resp.json()["data"] if resp.ok else localhost
 
 
-def check_endpoint(url):
+def check_endpoint(url, panel=None):
     try:
         # TODO: validate api compatibility
         resp = requests.get(url, timeout=5)
         resp.raise_for_status()
         return True
     except requests.RequestException as exc:
-        st.warning(exc)
+        if panel is not None:
+            panel.warning(exc)
         return False
 
 
@@ -155,13 +156,17 @@ def image_recognize():
     external = exp_s.text_input("Enter an external URL.", max_chars=63)
     st.sidebar.markdown("###")  ## add margin
     check_ep = [
-        st.sidebar.checkbox(fqdn, value=check_endpoint(f"https://{fqdn}/metrics"))
+        st.sidebar.checkbox(
+            fqdn,
+            value=check_endpoint(
+                f"{'https' if '.' in fqdn else 'http'}://{fqdn}/metrics"
+            ),
+        )
         for fqdn in endpoints
     ]
 
     if external:
-        with exp_s:
-            ok = check_endpoint(external)
+        ok = check_endpoint(external, exp_s)
         if ok:
             fqdn = urlparse(external).hostname
             endpoints.append(fqdn)
