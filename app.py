@@ -15,7 +15,7 @@ import pandas as pd
 import streamlit as st
 from PIL import Image
 
-from inhouse.utils_image import encode_image, decode_image
+from inhouse.utils_image import decode_image
 
 DATA_DIR = Path("test_images")
 RESULT_DIR = Path("assets")
@@ -80,19 +80,6 @@ def load_samples():
     return config, model_info
 
 
-@st.cache
-def recognize(image, url, token):
-    encoded_img = encode_image(image)
-    data = json.dumps({"encoded_image": encoded_img})
-
-    headers = {"Content-Type": "application/json"}
-    if token != "":
-        headers.update({"X-Bedrock-Api-Token": token})
-
-    response = requests.post(url, headers=headers, data=data)
-    return response.json()
-
-
 def get_heatmap(fqdn, img, target=None):
     scheme = "https" if "." in fqdn else "http"
     path = f"explain/{target}" if target else "explain"
@@ -151,7 +138,6 @@ def image_recognize():
     # Render sidebar
     select_ex = st.sidebar.selectbox("Select a sample image.", list(samples.keys()))
     uploaded_file = st.sidebar.file_uploader("Or upload an image.")
-    # select_ep = st.sidebar.multiselect("Choose model endpoints.", endpoints, endpoints)
     exp_s = st.sidebar.beta_expander("Available Model Endpoints")
     external = exp_s.text_input("Enter an external URL.", max_chars=63)
     st.sidebar.markdown("###")  ## add margin
@@ -172,15 +158,15 @@ def image_recognize():
             endpoints.append(fqdn)
             check_ep.append(st.sidebar.checkbox(fqdn))
 
-    left, right = st.beta_columns((3, 2))
+    # Parse uploaded file or use sample image
     if uploaded_file is not None:
-        cache = f"/tmp/{uploaded_file.name}"
-        with open(cache, "wb") as f:
+        cache_img = f"/tmp/{uploaded_file.name}"
+        with open(cache_img, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
         metadata = []
         if uploaded_file.name.lower().endswith(".dcm"):
-            dcm = pydicom.dcmread(cache)
+            dcm = pydicom.dcmread(cache_img)
             attributes = [
                 "PatientID",
                 "PatientAge",
@@ -194,44 +180,56 @@ def image_recognize():
                 metadata.append((tag, getattr(dcm, tag)))
             image = dcm.pixel_array
             # .npy extension will be appended by numpy
-            np.save(cache, image)
-            cache += ".npy"
+            np.save(cache_img, image)
+            cache_img += ".npy"
         else:
-            image = Image.open(cache)
+            image = Image.open(cache_img)
+        caption = "Uploaded Image"
+    else:
+        cache_img = DATA_DIR / samples[select_ex]["raw_img"]
+        image = Image.open(cache_img)
+        caption = "Sample Image"
+        metadata = [("NRIC", "i****ljAlp6KR6x"), ("Gender", ""), ("Age", "-")]
 
-        left.image(image, caption="Uploaded Image", width=400)
-        # Parallelize over thread pool
+    # Render patient metadata
+    left, right = st.beta_columns((3, 2))
+    left.image(image, caption=caption, width=400)
+    right.subheader("Patient Attributes")
+    df = pd.DataFrame(metadata, columns=["header", "Protected Data"])
+    df.set_index("header", inplace=True)
+    right.table(df)
+
+    selected_ep = [fqdn for fqdn, chosen in zip(endpoints, check_ep) if chosen]
+    if API_TOKEN:
+        # Make parallel requests to endpoints
         futures = [
-            EXECUTOR.submit(get_results, fqdn, open(cache, "rb"))
-            for fqdn, chosen in zip(endpoints, check_ep)
-            if chosen
+            EXECUTOR.submit(get_results, fqdn, open(cache_img, "rb"))
+            for fqdn in selected_ep
         ]
         _ = wait(futures)
         result = [f.result() for f in futures if not f.exception()]
     else:
-        sample = samples[select_ex]
-        raw_img = Image.open(DATA_DIR / sample["raw_img"])
-        left.image(raw_img, caption="Sample Image", width=400)
         # Create dummy data
-        metadata = [("NRIC", "i****ljAlp6KR6x"), ("Gender", ""), ("Age", "-")]
         result = []
-        for fqdn, chosen in zip(endpoints, check_ep):
+        for fqdn in selected_ep:
             model_name = fqdn.split(".")[0]
-            if not chosen or model_name not in model_info:
+            if model_name not in model_info:
                 continue
             targets = model_info[model_name]
             r = {k: str_to_float(k + str(select_ex)) for k in targets}
             r["model"] = model_name
             result.append(r)
 
-    # Render patient metadata
-    right.subheader("Patient Attributes")
-    df = pd.DataFrame(metadata, columns=["header", "Protected Data"])
-    df.set_index("header", inplace=True)
-    right.table(df)
-
     # Render summary text and table
+    render_marketplace(result, cache_img, selected_ep, select_ex)
+
+
+def render_marketplace(result, cache_img, selected_ep, select_ex):
     st.header("Model Marketplace Predictions")
+    if not result:
+        st.markdown("No predictions available.")
+        return
+
     pred = pd.DataFrame(result)
     pred.set_index("model", inplace=True)
     pred.drop([c for c in pred.columns if c.lower() == "normal"], axis=1, inplace=True)
@@ -265,23 +263,21 @@ def image_recognize():
         format_func=lambda opt: opt or "Auto (top score of every model)",
     )
 
-    if uploaded_file is not None:
+    if API_TOKEN:
         futures = [
-            EXECUTOR.submit(get_heatmap, fqdn, open(cache, "rb"), select_tg)
-            for fqdn, chosen in zip(endpoints, check_ep)
-            if chosen
-            and (
-                not select_tg
-                or pred[pred.index == fqdn.split(".")[0]][select_tg].notna()
-            )
+            EXECUTOR.submit(get_heatmap, fqdn, open(cache_img, "rb"), select_tg)
+            for fqdn in selected_ep
+            if not select_tg
+            or pred[pred.index == fqdn.split(".")[0]][select_tg].notna().all()
         ]
         _ = wait(futures)
         result = [f.result() for f in futures if not f.exception()]
     else:
         result = []
-        for fqdn, chosen in zip(endpoints, check_ep):
+        samples, model_info = load_samples()
+        for fqdn in selected_ep:
             model_name = fqdn.split(".")[0]
-            if not chosen or model_name not in model_info:
+            if model_name not in model_info:
                 continue
             if not select_tg:
                 prob = pred[pred.index == model_name].max(axis=1).iloc[0] / 100
