@@ -75,7 +75,7 @@ def load_samples():
             "Fibrosis",
             "Pleural_Thickening",
             "Hernia",
-        ]
+        ],
     }
     return config, model_info
 
@@ -154,7 +154,10 @@ def image_recognize():
     exp_s = st.sidebar.beta_expander("Available Model Endpoints")
     external = exp_s.text_input("Enter an external URL.", max_chars=63)
     st.sidebar.markdown("###")  ## add margin
-    check_ep = [st.sidebar.checkbox(fqdn, value=True) for fqdn in endpoints]
+    check_ep = [
+        st.sidebar.checkbox(fqdn, value=check_endpoint(f"https://{fqdn}/metrics"))
+        for fqdn in endpoints
+    ]
 
     if external:
         with exp_s:
@@ -250,7 +253,9 @@ def image_recognize():
     st.text("")  # add margin
     left, right = st.beta_columns((1, 2))
     left.header("Heatmap Visualization")
-    columns = set(k for r in result for k in r.keys() if k != "model")
+    columns = set(
+        k for r in result for k in r.keys() if k.lower() not in ["model", "normal"]
+    )
     select_tg = right.selectbox(
         "Target class:",
         [None] + list(columns),
@@ -261,7 +266,11 @@ def image_recognize():
         futures = [
             EXECUTOR.submit(get_heatmap, fqdn, open(cache, "rb"), select_tg)
             for fqdn, chosen in zip(endpoints, check_ep)
-            if chosen and (not select_tg or pred[pred.index == fqdn.split(".")[0]][select_tg].notna())
+            if chosen
+            and (
+                not select_tg
+                or pred[pred.index == fqdn.split(".")[0]][select_tg].notna()
+            )
         ]
         _ = wait(futures)
         result = [f.result() for f in futures if not f.exception()]
