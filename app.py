@@ -27,29 +27,6 @@ def str_to_float(s):
     return float(crc32(s.encode()) & 0xFFFFFFFF) / 2 ** 32
 
 
-def load_models():
-    model_info = {}
-    model_info["ihis"] = ["Normal", "COVID-19"]
-    model_info["inhouse"] = ["Normal", "COVID-19"]
-    model_info["chexnet"] = [
-        "Atelectasis",
-        "Cardiomegaly",
-        "Effusion",
-        "Infiltration",
-        "Mass",
-        "Nodule",
-        "Pneumonia",
-        "Pneumothorax",
-        "Consolidation",
-        "Edema",
-        "Emphysema",
-        "Fibrosis",
-        "Pleural_Thickening",
-        "Hernia",
-    ]
-    return model_info
-
-
 def load_samples():
     config = {
         "ex1": {
@@ -81,7 +58,26 @@ def load_samples():
             "ig_image": "ex4_ig_img.jpeg",
         },
     }
-    return config
+    model_info = {
+        "inhouse": ["Normal", "COVID-19"],
+        "chexnet": [
+            "Atelectasis",
+            "Cardiomegaly",
+            "Effusion",
+            "Infiltration",
+            "Mass",
+            "Nodule",
+            "Pneumonia",
+            "Pneumothorax",
+            "Consolidation",
+            "Edema",
+            "Emphysema",
+            "Fibrosis",
+            "Pleural_Thickening",
+            "Hernia",
+        ]
+    }
+    return config, model_info
 
 
 @st.cache
@@ -149,8 +145,7 @@ def image_recognize():
         for endpoint in get_endpoints()
         if ".pub." not in endpoint["fqdn"]
     ]
-    samples = load_samples()
-    model_info = load_models()
+    samples, model_info = load_samples()
 
     # Render sidebar
     select_ex = st.sidebar.selectbox("Select a sample image.", list(samples.keys()))
@@ -204,7 +199,7 @@ def image_recognize():
             if chosen
         ]
         _ = wait(futures)
-        result = [f.result() for f in futures]
+        result = [f.result() for f in futures if not f.exception()]
     else:
         sample = samples[select_ex]
         raw_img = Image.open(DATA_DIR / sample["raw_img"])
@@ -266,16 +261,16 @@ def image_recognize():
         futures = [
             EXECUTOR.submit(get_heatmap, fqdn, open(cache, "rb"), select_tg)
             for fqdn, chosen in zip(endpoints, check_ep)
-            if chosen and (not select_tg or select_tg in model_info[fqdn.split(".")[0]])
+            if chosen and (not select_tg or pred[pred.index == fqdn.split(".")[0]][select_tg].notna())
         ]
         _ = wait(futures)
-        result = [f.result() for f in futures]
+        result = [f.result() for f in futures if not f.exception()]
     else:
         result = []
         for fqdn, chosen in zip(endpoints, check_ep):
-            if not chosen:
-                continue
             model_name = fqdn.split(".")[0]
+            if not chosen or model_name not in model_info:
+                continue
             if not select_tg:
                 prob = pred[pred.index == model_name].max(axis=1).iloc[0] / 100
             elif select_tg in model_info[model_name]:
@@ -297,7 +292,7 @@ def image_recognize():
             )
 
     # Layout images
-    p_cols = st.beta_columns(sum(check_ep))
+    p_cols = st.beta_columns(len(result))
     for col, sample in zip(p_cols, result):
         model_name = sample["model"]
         prob = sample["prob"] * 100

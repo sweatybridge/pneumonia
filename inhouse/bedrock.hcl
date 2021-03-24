@@ -39,6 +39,7 @@ serve {
         ]}
     ]
     parameters {
+        TARGET_CLASS = "COVID-19"
         WORKERS = "1"
     }
 }

@@ -26,7 +26,7 @@ MODEL = CustomSEResNeXt()
 MODEL.load_state_dict(WEIGHTS)
 MODEL.eval()
 
-CLASS_NAMES = ["Normal", "COVID-19"]
+CLASS_NAMES = ["Normal", os.getenv("TARGET_CLASS") or "COVID-19"]
 TRANSFORM = transforms.Compose(
     [
         transforms.ToPILImage(),
