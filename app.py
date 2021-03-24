@@ -308,6 +308,8 @@ def render_marketplace(result, cache_img, selected_ep, select_ex):
             risk = "High Risk" if prob > 50 else "Low Risk"
         else:
             risk = pred[pred.index == model_name].idxmax(axis=1).iloc[0]
+            if not np.isclose(pred[pred.index == model_name][risk], prob):
+                risk = "Normal"
         col.subheader(f"{model_name}: `{prob:.1f}%` ({risk})")
         col.image(sample["cam_image"], caption="Grad-CAM Image", width=330)
         col.image(sample["gc_image"], caption="Guided Grad-CAM Image", width=330)
