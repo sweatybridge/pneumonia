@@ -233,8 +233,8 @@ def image_recognize():
     # Render summary text and table
     st.header("Model Marketplace Predictions")
     pred = pd.DataFrame(result)
-    pred.drop("Normal", axis=1, inplace=True)
     pred.set_index("model", inplace=True)
+    pred.drop([c for c in pred.columns if c.lower() == "normal"], axis=1, inplace=True)
     pred *= 100
 
     exp = st.beta_expander("Confidence by model (row) and target class (column)")
