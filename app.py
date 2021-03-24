@@ -299,8 +299,14 @@ def render_marketplace(result, cache_img, selected_ep, select_ex):
                 }
             )
 
-    # Layout images
-    p_cols = st.beta_columns(len(result))
+    # Layout headers
+    n_col = max(len(result), 2)
+    p_cols = st.beta_columns(n_col)
+    for col, sample in zip(p_cols, result):
+        col.subheader(sample["model"])
+
+    # Layout images separately to account for text wrapping
+    p_cols = st.beta_columns(n_col)
     for col, sample in zip(p_cols, result):
         model_name = sample["model"]
         prob = sample["prob"] * 100
@@ -310,9 +316,10 @@ def render_marketplace(result, cache_img, selected_ep, select_ex):
             risk = pred[pred.index == model_name].idxmax(axis=1).iloc[0]
             if not np.isclose(pred[pred.index == model_name][risk], prob):
                 risk = "Normal"
-        col.subheader(f"{model_name}: `{prob:.1f}%` ({risk})")
-        col.image(sample["cam_image"], caption="Grad-CAM Image", width=330)
-        col.image(sample["gc_image"], caption="Guided Grad-CAM Image", width=330)
+        caption = f"{risk}: {prob:.1f}%"
+        col.image([sample["cam_image"], sample["gc_image"]], caption=[None, caption], use_column_width=True)
+        # col.image(sample["cam_image"], caption="Grad-CAM Image", use_column_width=True)
+        # col.image(sample["gc_image"], caption="Guided Grad-CAM Image", use_column_width=True)
 
 
 if __name__ == "__main__":

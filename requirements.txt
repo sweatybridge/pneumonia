@@ -1,3 +1,4 @@
 opencv-python-headless==4.5.1.48
-streamlit==0.78.0
+# Streamlit > 0.78.0 has a bug with beta_columns width
+streamlit==0.77.0
 pydicom==2.1.2
