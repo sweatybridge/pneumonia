@@ -233,6 +233,7 @@ def image_recognize():
     # Render summary text and table
     st.header("Model Marketplace Predictions")
     pred = pd.DataFrame(result)
+    pred.drop("Normal", axis=1, inplace=True)
     pred.set_index("model", inplace=True)
     pred *= 100
 
@@ -258,12 +259,9 @@ def image_recognize():
     st.text("")  # add margin
     left, right = st.beta_columns((1, 2))
     left.header("Heatmap Visualization")
-    columns = set(
-        k for r in result for k in r.keys() if k.lower() not in ["model", "normal"]
-    )
     select_tg = right.selectbox(
         "Target class:",
-        [None] + list(columns),
+        [None] + list(pred.columns),
         format_func=lambda opt: opt or "Auto (top score of every model)",
     )
 
