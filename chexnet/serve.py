@@ -1,7 +1,6 @@
-from dataclasses import asdict
+import re
 from logging import getLogger
 from os.path import exists
-import re
 
 import cv2
 import numpy as np
@@ -19,12 +18,7 @@ from torchvision.transforms import (
 )
 
 from gradcam_pytorch import GradCam
-from utils_image import (
-    encode_image,
-    decode_image,
-    superimpose_heatmap,
-    get_heatmap,
-)
+from utils_image import encode_image, superimpose_heatmap
 
 
 class Model(BaseModel):
@@ -50,7 +44,7 @@ class Model(BaseModel):
         "Hernia",
     ]
 
-    def __init__(self, logger):
+    def __init__(self, logger=None):
         self.logger = logger or getLogger()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = densenet121(pretrained=True)
@@ -97,14 +91,15 @@ class Model(BaseModel):
         )
 
     def pre_process(self, files, http_body=None):
-        if files["image"].filename.lower().endswith(".npy"):
-            img = np.load(files["image"])
+        image = files["image"]
+        if hasattr(image, "filename") and image.filename.lower().endswith(".npy"):
+            img = np.load(image)
             if len(img.shape) == 2 or (len(img.shape) == 3 and img.shape[0] == 1):
                 # Convert grayscale to rgb
                 img = np.tile(img, (3, 1, 1)).transpose(1, 2, 0)
         else:
             # Use opencv to open the image file
-            img = np.frombuffer(files["image"].read(), dtype=np.uint8)
+            img = np.frombuffer(image.read(), dtype=np.uint8)
             img = cv2.imdecode(img, cv2.IMREAD_ANYCOLOR)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         features = self.transform(img).to(self.device)

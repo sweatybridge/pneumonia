@@ -18,5 +18,5 @@ class TestModelServer(TestCase):
         features = self.m.pre_process(files={"image": BytesIO(soccer)})
         result = self.m.explain(features=features, target="0")[0]
         self.assertGreater(result["prob"], 0)
-        result = self.m.explain(features=features, target="Cardiomegaly")[0]
+        result = self.m.explain(features=features, target=Model.CLASS_NAMES[0])[0]
         self.assertGreater(result["prob"], 0)

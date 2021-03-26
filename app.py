@@ -59,6 +59,7 @@ def load_samples():
         },
     }
     model_info = {
+        "cape": ["Normal", "COVID-19"],
         "inhouse": ["Normal", "COVID-19"],
         "chexnet": [
             "Atelectasis",
@@ -107,7 +108,7 @@ def get_endpoints():
         params={"project_id": "ihis-dev"},
         headers={"X-Bedrock-Access-Token": API_TOKEN},
     )
-    localhost = [{"fqdn": "inhouse"}, {"fqdn": "chexnet"}, {"fqdn": "ihis"}]
+    localhost = [{"fqdn": "inhouse"}, {"fqdn": "chexnet"}, {"fqdn": "cape"}]
     return resp.json()["data"] if resp.ok else localhost
 
 
