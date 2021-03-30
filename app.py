@@ -243,7 +243,7 @@ def render_marketplace(result, cache_img, selected_ep, select_ex):
     table = st.dataframe(
         pred.style.set_precision(1)
         .set_na_rep("-")
-        .highlight_max(axis=0)
+        .highlight_max(axis=1)
         .applymap(lambda v: f"color: {'red' if v > 50 else 'black'}")
     )
 
@@ -318,7 +318,8 @@ def render_marketplace(result, cache_img, selected_ep, select_ex):
             if not np.isclose(pred[pred.index == model_name][risk], prob):
                 risk = "Normal"
         caption = f"{risk}: {prob:.1f}%"
-        col.image([sample["cam_image"], sample["gc_image"]], caption=[None, caption], use_column_width=True)
+        col.image(sample["cam_image"], caption=caption, use_column_width=True)
+        # col.image([sample["cam_image"], sample["gc_image"]], caption=[None, caption], use_column_width=True)
         # col.image(sample["cam_image"], caption="Grad-CAM Image", use_column_width=True)
         # col.image(sample["gc_image"], caption="Guided Grad-CAM Image", use_column_width=True)
 
